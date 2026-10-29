@@ -1,0 +1,1 @@
+CoolProp browser engine distributed by the demo linked from official CoolProp documentation. Source: https://github.com/dvd101x/web-thermodynamics/tree/509bd2d0a91041fed237960ef3cad51c81c3e041/public

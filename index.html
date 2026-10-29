@@ -1,103 +1,19 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LBM · Explore fluid research</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=DM+Sans:wght@400;500;700&display=swap">
-<style>
-:root{--bg:#FFFFFF;--fg:#14213D;--muted:#4A5568;--panel:#F1F4FF;--accent:#2347F5;--hot:#C2410C;--gold:#FFD23F;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}}
-:root[data-theme="dark"]{--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}
-html{scroll-padding-top:env(safe-area-inset-top,0px)}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:'DM Sans',system-ui,sans-serif;line-height:1.5;font-size:17px}
-main{max-width:920px;margin:0 auto;padding:22px 18px 40px}
-h1,h2,h3{font-family:'Space Grotesk',system-ui,sans-serif;margin:0}
-h1{font-size:clamp(54px,14vw,96px);line-height:.9;color:var(--accent)}
-h2{font-size:clamp(26px,5vw,34px);margin-bottom:10px}
-h3{font-size:20px;margin:22px 0 8px}
-a{color:var(--accent)}
-.tag{font-family:'Space Grotesk',system-ui,sans-serif;font-weight:500;font-size:clamp(18px,3.6vw,24px);margin:10px 0 24px}
-.hero{display:flex;gap:20px;align-items:center;flex-wrap:wrap;border-bottom:4px solid var(--accent);padding-bottom:18px;margin-bottom:22px}
-.menu{display:grid;gap:12px}
-.card{display:block;text-decoration:none;color:inherit;background:var(--panel);padding:16px 18px;border-left:8px solid var(--accent);min-height:44px}
-.card:nth-child(2){border-color:#FF6B35}.card:nth-child(3){border-color:var(--gold)}
-.card b{font-family:'Space Grotesk',system-ui,sans-serif;font-size:22px;display:block}
-.card span{color:var(--muted)}
-.card:hover,.card:focus-visible{outline:3px solid var(--accent)}
-.num{display:inline-block;background:var(--fg);color:var(--bg);font-weight:700;width:28px;height:28px;line-height:28px;text-align:center;margin-right:8px}
-.back{display:inline-block;margin-bottom:14px;font-weight:700;min-height:44px;line-height:44px}
-.demos{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-.btn{display:inline-block;margin-top:10px;padding:0 18px;line-height:44px;min-height:44px;background:var(--accent);color:var(--bg);font-weight:700;text-decoration:none}
-.steps{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:14px 0}
-.step{padding:12px 14px}.s1{background:#EEF1FF;color:#14213D}.s2{background:#FFF1E8;color:#14213D}.s3{background:#FFF8D6;color:#14213D}
-.cols{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-.cols>div{background:var(--panel);padding:12px 16px}
-ul{padding-left:20px;margin:6px 0}
-details{background:var(--panel);margin:8px 0;border-left:6px solid var(--accent)}
-.gb details{border-color:var(--hot)}
-summary{cursor:pointer;padding:12px 14px;font-weight:700;min-height:44px;box-sizing:border-box}
-details div{padding:0 14px 12px}
-details p{margin:6px 0}
-footer{margin-top:36px;padding-top:12px;border-top:2px solid var(--fg);font-size:15px;color:var(--muted)}
-.view{display:none}.view.on{display:block}
-.hopper{fill:#FFD23F;stroke:#14213D;stroke-width:.8;animation:hop 3s ease-in-out infinite}
-.core{transform-box:fill-box;transform-origin:center;animation:bump 3s ease-in-out infinite}
-@keyframes hop{0%{transform:translate(0,0)}35%,50%{transform:translate(var(--dx),var(--dy))}85%,100%{transform:translate(0,0)}}
-@keyframes bump{0%,80%{transform:scale(1)}92%{transform:scale(1.9)}100%{transform:scale(1)}}
-@media (prefers-reduced-motion:reduce){.hopper,.core{animation:none}}
-</style>
-<meta name="description" content="Explore lattice Boltzmann methods, research ideas for master’s students, and fluid simulations."><link rel="stylesheet" href="assets/site.css"></head>
-<body><a class="skip-link" href="#main-content">Skip to content</a><nav class="site-nav" aria-label="Site navigation"><a href="index.html#menu" aria-current="page">Menu</a><a href="index.html#play">Play</a><a href="how.html">How LBM works</a><a href="research.html">Research</a><a href="gallery.html">Gallery</a></nav>
-<main id="main-content">
-
-<section id="menu" class="view on">
-<div class="hero">
-<svg width="140" height="140" viewBox="0 0 100 100" role="img" aria-label="Lattice node with eight particles hopping to its neighbors">
-<g stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round"><line x1="50" y1="50" x2="88" y2="50"/><line x1="50" y1="50" x2="12" y2="50"/><line x1="50" y1="50" x2="50" y2="12"/><line x1="50" y1="50" x2="50" y2="88"/>
-<g stroke="#FF6B35"><line x1="50" y1="50" x2="84" y2="16"/><line x1="50" y1="50" x2="16" y2="16"/><line x1="50" y1="50" x2="84" y2="84"/><line x1="50" y1="50" x2="16" y2="84"/></g></g>
-<g fill="var(--fg)"><circle class="core" cx="50" cy="50" r="6"/><circle cx="88" cy="50" r="3.5"/><circle cx="12" cy="50" r="3.5"/><circle cx="50" cy="12" r="3.5"/><circle cx="50" cy="88" r="3.5"/><circle cx="84" cy="16" r="3.5"/><circle cx="16" cy="16" r="3.5"/><circle cx="84" cy="84" r="3.5"/><circle cx="16" cy="84" r="3.5"/></g>
-<circle class="hopper" cx="50" cy="50" r="2.8" style="--dx:38px;--dy:0px"/><circle class="hopper" cx="50" cy="50" r="2.8" style="--dx:-38px;--dy:0px"/><circle class="hopper" cx="50" cy="50" r="2.8" style="--dx:0px;--dy:-38px"/><circle class="hopper" cx="50" cy="50" r="2.8" style="--dx:0px;--dy:38px"/><circle class="hopper" cx="50" cy="50" r="2.8" style="--dx:34px;--dy:-34px"/><circle class="hopper" cx="50" cy="50" r="2.8" style="--dx:-34px;--dy:-34px"/><circle class="hopper" cx="50" cy="50" r="2.8" style="--dx:34px;--dy:34px"/><circle class="hopper" cx="50" cy="50" r="2.8" style="--dx:-34px;--dy:34px"/>
-</svg>
-<div><h1>LBM</h1><p class="tag">Lattice Boltzmann Methods: fluids, but make it a game of billiards.</p></div>
-</div>
-<p>Interested in a master’s research project? No LBM experience needed. Pick a door:</p>
-<nav class="menu" aria-label="Main menu">
-<a class="card" href="#play"><b><span class="num" style="color:var(--bg)">1</span>Play with it</b><span>Two live simulations that run in your browser, with the code on the page.</span></a>
-<a class="card" href="how.html"><b><span class="num" style="color:var(--bg)">2</span>How LBM works</b><span>Populations, equilibrium, collision and streaming—explained with interactive graphics.</span></a>
-<a class="card" href="research.html"><b><span class="num" style="color:var(--bg)">3</span>What you could research</b><span>Droplets and bubbles, porous media, reliable methods, and efficient computing.</span></a>
-<a class="card" href="gallery.html"><b><span class="num" style="color:var(--bg)">4</span>See the gallery</b><span>Explore simulations of interfaces, heated flows, wakes, jets and a 3D vortex ring.</span></a></nav>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#19363d"><title>Thermodynamics II · Course applets</title><meta name="description" content="Interactive Thermodynamics II applets. Explore steam power, refrigeration, and Joule–Thomson throttling in your browser."><link rel="stylesheet" href="course.css"><link rel="icon" type="image/svg+xml" href="assets/favicon.svg"></head>
+<body>
+<a class="skip" href="#applets">Skip to applets</a>
+<div class="page">
+<header class="masthead"><a class="course-name" href="index.html" aria-label="Thermodynamics II home"><span class="course-mark" aria-hidden="true">T<span>II</span></span><span>Thermodynamics II<small>COURSE COMPANION</small></span></a><nav aria-label="Course navigation"><a href="#applets">Applets</a><a href="#course">About the course</a></nav></header>
+<main>
+<section class="intro" aria-labelledby="course-title"><p class="eyebrow">THERMODYNAMICS II / INTERACTIVE LEARNING</p><h1 id="course-title">Thermodynamics II</h1><p class="lead">Interactive applets for exploring thermodynamic cycles and processes.</p><div class="byline"><span>Mostafa Moradi</span><span class="divider" aria-hidden="true"></span><span>Course 2605123</span></div></section>
+<section class="library" id="applets" aria-labelledby="library-title"><div class="section-heading"><div><p class="eyebrow">THE APPLET LIBRARY</p><h2 id="library-title">Interactive applets.</h2></div><span class="count">03 applets available</span></div>
+<article class="applet"><div class="applet-art"><a href="applets/rankine/index.html" tabindex="-1" aria-hidden="true"><img src="assets/rankine-cycle.svg" width="620" height="430" alt=""></a><span class="art-caption">VAPOR POWER CYCLES</span></div><div class="applet-copy"><div class="applet-meta"><span class="applet-number">01</span><span class="available"><i aria-hidden="true"></i>Ready to explore</span></div><h3>Rankine steam cycle</h3><p>Follow water and steam through a power plant. Adjust pressures, temperature, and device efficiencies, then see how the states and cycle performance change.</p><ul class="features"><li>Simple cycle, reheat, and feedwater heaters</li><li>Live T–s diagram, plant schematic, and state table</li><li>Sliders and direct numeric entry</li></ul><a class="open-app" href="applets/rankine/index.html">Open the Rankine applet <span aria-hidden="true">↗</span></a><p class="browser-note">Runs in your browser. No MATLAB installation needed.</p></div></article>
+<article class="applet"><div class="applet-art"><a href="applets/vapor-compression/index.html" tabindex="-1" aria-hidden="true"><img src="assets/vapor-compression.svg" width="620" height="430" alt=""></a><span class="art-caption">REFRIGERATION CYCLES</span></div><div class="applet-copy"><div class="applet-meta"><span class="applet-number">02</span><span class="available"><i aria-hidden="true"></i>Ready to explore</span></div><h3>Vapor-compression cycle</h3><p>Explore a refrigeration system with 15 refrigerants and 30 application presets. Change operating conditions and compare cooling performance, compressor power, and refrigerant states.</p><ul class="features"><li>Temperature or absolute-pressure inputs</li><li>Live T–s and p–h diagrams, schematic, and state table</li><li>Sliders and direct numeric entry</li></ul><a class="open-app" href="applets/vapor-compression/index.html">Open the refrigeration applet <span aria-hidden="true">↗</span></a><p class="browser-note">Runs in your browser. No MATLAB installation needed.</p></div></article>
+<article class="applet"><div class="applet-art"><a href="applets/joule-thomson/index.html" tabindex="-1" aria-hidden="true"><img src="assets/joule-thomson.svg" width="620" height="430" alt=""></a><span class="art-caption">THERMODYNAMIC PROPERTY RELATIONS</span></div><div class="applet-copy"><div class="applet-meta"><span class="applet-number">03</span><span class="available"><i aria-hidden="true"></i>Ready to explore</span></div><h3>Joule–Thomson throttling</h3><p>Does a pressure drop always cause cooling? Pass seven real fluids through a valve and discover when they cool, heat, or partly vaporize.</p><ul class="features"><li>Animated valve and live temperature–pressure diagram</li><li>Ideal-gas comparison and inversion curve</li><li>Room-temperature, cryogenic, and flashing experiments</li></ul><a class="open-app" href="applets/joule-thomson/index.html">Open the throttling applet <span aria-hidden="true">↗</span></a><p class="browser-note">Chapter 12 · Runs in your browser.</p></div></article>
+<p class="library-note">More applets will be added to this library. Return here to find the latest collection.</p>
 </section>
-
-<section id="play" class="view">
-<a class="back" href="#menu">&larr; Back to menu</a>
-<h2>Play with it</h2>
-<p>Both demos run on your device. Change the Reynolds number, watch how the flow responds, and explore the solver code shown below each simulation.</p>
-<div class="demos">
-<div class="card" style="border-color:var(--accent)"><b>Lid-driven cavity</b><span>A box with a moving lid. Watch the corner eddies and shear layers appear as Re climbs.</span><br><a class="btn" href="https://mostafalbm.github.io/lbm-lid/" target="_blank" rel="noopener">Launch cavity</a></div>
-<div class="card" style="border-color:#FF6B35"><b>Flow over a square</b><span>A wake that is steady, then sheds, then turns messy, up to Re = 10,000.</span><br><a class="btn" href="https://mostafalbm.github.io/lbm-square/" target="_blank" rel="noopener">Launch square</a></div>
-</div>
-<h3>A first week, if you get hooked</h3>
-<ul>
-<li>Run the cavity at different Reynolds numbers. What changes in the main vortex and the corner eddies?</li>
-<li>Read the solver on the page. Find the collision and streaming steps.</li>
-<li>Change one thing: the obstacle size, the lid speed, the collision step.</li>
-<li>Tell us what you saw. That is a thesis conversation.</li>
-</ul>
-</section>
-
-
-
-
-
-<footer>
-<p><b>What you take away:</b> numerical methods, GPU and HPC skills, verification habits, and scientific C++ or Python that employers and PhD programs value.</p>
-
-</footer>
-</main>
-
-<script>
-function route(){if(location.hash&&!['#play','#menu'].includes(location.hash))return;const active=location.hash==='#play'?'play':'menu';document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id===active));document.querySelectorAll('.site-nav a').forEach(a=>{if(a.getAttribute('href')==='index.html#'+active)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});if(location.hash)window.scrollTo(0,0);document.querySelectorAll('video').forEach(v=>v.pause());}
-addEventListener('hashchange',route);route();
-</script><noscript><style>.view{display:block;margin-bottom:40px}</style></noscript></body>
-</html>
+<section class="study" aria-labelledby="study-title"><div><p class="eyebrow">MAKE IT AN EXPERIMENT</p><h2 id="study-title">Predict. Change. Explain.</h2></div><ol><li><span>01</span><div><h3>Make a prediction</h3><p>Choose one parameter. What do you expect to happen to the cycle?</p></div></li><li><span>02</span><div><h3>Test one change</h3><p>Move the slider or type a value. Follow the states, heat, and work.</p></div></li><li><span>03</span><div><h3>Check your reasoning</h3><p>Explain the result using property relations and energy balances.</p></div></li></ol></section>
+<section class="course" id="course" aria-labelledby="about-title"><div class="course-intro"><p class="eyebrow">ABOUT THE COURSE</p><h2 id="about-title">Energy conversion,<br>from cycles to flow.</h2><p>Thermodynamics II builds on Thermodynamics I through power generation, refrigeration, mixtures, combustion, and compressible flow.</p><p class="textbook"><span>Required text</span>Çengel, Boles &amp; Kanoğlu<br><em>Thermodynamics: An Engineering Approach</em>, 9th edition.</p></div><ol class="modules"><li><span>01</span>Gas power cycles</li><li><span>02</span>Vapor power cycles</li><li><span>03</span>Refrigeration cycles</li><li><span>04</span>Thermodynamic relations</li><li><span>05</span>Gas mixtures</li><li><span>06</span>Gas–vapor mixtures &amp; air conditioning</li><li><span>07</span>Combustion</li><li><span>08</span>High-speed gas flow</li></ol></section>
+</main><footer><div><strong>Thermodynamics II</strong><span>Mostafa Moradi · Course 2605123</span></div><a href="mailto:mostafa.moradi@aut.ac.ir">mostafa.moradi@aut.ac.ir <span aria-hidden="true">↗</span></a></footer>
+</div></body></html>
