@@ -1,0 +1,336 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>LBM: natural convection</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+:root{--bg:#FFFFFF;--fg:#14213D;--muted:#4A5568;--panel:#F1F4FF;--accent:#2347F5;--hot:#C2410C;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}}
+:root[data-theme="dark"]{--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:'DM Sans',system-ui,sans-serif;line-height:1.45}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 32px}
+h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:clamp(34px,7vw,56px);line-height:1;margin:0;color:var(--accent)}
+.sub{margin:8px 0 18px;font-size:17px}
+.wrap{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.left{flex:1 1 340px;max-width:560px}
+.right{flex:1 1 360px;min-width:0}
+canvas{width:100%;aspect-ratio:1;display:block;background:#14213D;border:2px solid var(--fg)}
+.lid{font-size:13px;color:var(--muted);margin:0 0 4px;text-align:center}
+.ctl{background:var(--panel);padding:12px;margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.ctl label{font-weight:700;display:flex;justify-content:space-between;gap:8px}
+input[type=range]{width:100%;min-height:44px}
+button{min-height:44px;padding:0 16px;font:inherit;font-weight:700;background:var(--accent);color:var(--bg);border:0;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.stats{font-size:14px;color:var(--muted)}
+.warn{color:var(--hot);font-weight:700;min-height:1.4em}
+h2{font-family:'Space Grotesk',system-ui,sans-serif;font-size:20px;margin:0 0 6px}
+.codebox{overflow-x:auto;background:var(--panel);padding:10px 12px;max-height:520px;overflow-y:auto}
+pre{margin:0;font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.note{font-size:14px;margin-top:12px}
+
+canvas.flow{aspect-ratio:128/33;box-sizing:border-box;touch-action:none;cursor:crosshair}
+button.alt{background:var(--panel);color:var(--fg);border:2px solid var(--accent)}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px 20px}.controls label{display:flex;justify-content:space-between;font-weight:700}.controls input{width:100%;accent-color:var(--accent)}
+.readouts{display:flex;gap:6px 18px;flex-wrap:wrap;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}.readouts b{color:var(--fg)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}.swatch{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}.fine{font-size:13px;color:var(--muted)}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:20px 0}.chart h2{font-size:18px}.chart canvas{aspect-ratio:3.2;box-sizing:border-box;background:var(--panel);border:0}.chart p{font-size:13px;color:var(--muted);margin:4px 0 0}
+@media(max-width:600px){.charts{grid-template-columns:1fr}.controls{grid-template-columns:1fr}}
+pre{tab-size:2}.equations{font-size:14px}.pulseHint{font-size:13px;color:var(--muted);margin-top:6px}
+</style><style>.demo-nav{font-family:'DM Sans',system-ui,sans-serif}
+body{font-family:'DM Sans',system-ui,sans-serif;line-height:1.45}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 32px}
+h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:clamp(34px,7vw,56px);line-height:1;margin:0;color:var(--accent)}
+h2{font-family:'Space Grotesk',system-ui,sans-serif;font-size:20px;margin:0 0 6px}
+.sub{margin:8px 0 18px;font-size:17px}
+.ctl{background:var(--panel);padding:12px;margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.ctl label{font-weight:700;display:flex;justify-content:space-between;gap:8px}
+button{min-height:44px;padding:0 16px;font:inherit;font-weight:700;background:var(--accent);color:var(--bg);border:0;cursor:pointer}
+button.alt{background:var(--panel);color:var(--fg);border:2px solid var(--accent)}
+input,select{font-family:inherit;accent-color:var(--accent)}
+input[type=range]{width:100%;min-height:44px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.codebox{overflow:auto;background:var(--panel);padding:10px 12px;max-height:520px}
+pre{margin:0;font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace;tab-size:2}
+.note{font-size:14px;margin-top:12px}.fine{font-size:13px;color:var(--muted)}
+canvas{border:2px solid var(--fg);box-sizing:border-box}
+</style><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/demos.css"><link rel="stylesheet" href="../assets/demo-common.css"></head><body><a class="skip-link" href="#main-content">Skip to content</a><nav class="site-nav" aria-label="Site navigation"><a href="../index.html#menu">Menu</a><a href="../index.html#play">Play</a><a href="../how.html">How LBM works</a><a href="../research.html">Research</a><a href="../gallery.html">Gallery</a></nav><nav class="demo-nav" aria-label="Simulation demos"><a href="lid.html">Lid-driven cavity</a><a href="square.html">Flow over a square</a><a href="porous.html">Porous flow</a><a href="droplet.html">Droplet impact</a><a href="invasion.html">Capillary invasion</a><a href="convection.html" aria-current="page">Natural convection</a></nav><main id="main-content"><h1>Natural convection</h1>
+<p class="sub">Heat a fluid from below and watch motion emerge. Particles <b>collide</b> and <b>stream</b>; a second population carries temperature. The core solver is below (<span id="lines">…</span> lines).</p>
+<canvas class="flow" id="cv" width="1024" height="264" aria-label="Temperature and tracers in a fluid layer heated from below or above. Click to add a temperature pulse."></canvas>
+<div class="legend"><span><i class="swatch" style="background:#2347f5"></i>Cold: T = 0</span><span><i class="swatch" style="background:#ff7832"></i>Hot: T = 1</span><span id="heatingLabel">Bottom hot · top cold</span></div>
+<div class="pulseHint" id="pulseHint">Click or tap the fluid to add a bounded warm pulse.</div>
+<div class="ctl"><div class="controls">
+<div><label for="ra"><span>Rayleigh number</span><span id="raOut"></span></label><input id="ra" type="range" min="0" max="100" step="1" value="90"><div class="fine">Buoyancy relative to viscous and thermal diffusion.</div></div>
+<div><label for="pr"><span>Prandtl number</span><span id="prOut">1.0</span></label><input id="pr" type="range" min="0.3" max="3" step="0.1" value="1"><div class="fine">Momentum diffusivity divided by thermal diffusivity.</div></div>
+</div><div class="row"><button id="pause">Pause</button><button id="reset">Reset</button><button id="flip" class="alt">Heat from above</button><button id="pulse" class="alt">Pulse: warm</button><button id="tracers" class="alt" aria-pressed="true">Tracers: on</button><button id="arrows" class="alt" aria-pressed="false">Velocity arrows: off</button></div>
+<div class="readouts" id="stats"></div><div class="warn" id="warn" role="status"></div>
+<div class="fine">Parameter and heating changes replay the experiment. Pulses add or remove heat without pushing the fluid directly.</div></div>
+<div class="charts"><div class="chart"><h2>Mean temperature profile</h2><canvas id="profile" width="640" height="200" aria-label="Horizontal mean temperature versus height, compared with the linear conduction profile"></canvas><p>Blue: horizontal mean · dashed: conduction alone.</p></div><div class="chart"><h2>Heat transport</h2><canvas id="history" width="640" height="200" aria-label="Nusselt number history with the conduction baseline at one"></canvas><p>Blue: mean plate Nusselt number · dashed: Nu = 1.</p></div></div>
+<h2>The core solver</h2><div class="codebox"><pre id="code"></pre></div>
+<p class="note">Try it: start at low Rayleigh number and add a heat pulse. Does it fade or grow into circulation? Raise Rayleigh number to strengthen convection, then heat from above and compare the response. A small initial temperature disturbance seeds the experiment reproducibly.</p>
+<p class="note">Warm fluid is buoyant and cold fluid tends to sink. When the bottom is hot, rising and falling plumes can form circulation rolls. With the top hot, the stratification is stable. Prandtl number changes the balance between momentum diffusion and heat diffusion while Rayleigh number is held fixed.</p>
+<p class="note">Nu compares heat crossing the plates with conduction alone. Nu = 1 is the conductive reference. The displayed value averages the bottom and top plate fluxes; these can differ while the fluid gains or loses heat. Pulses create additional transients.</p>
+<p class="equations">Ra = gβ |ΔT| H³ / (ν α) &nbsp;·&nbsp; Pr = ν / α &nbsp;·&nbsp; t* = t U<sub>ff</sub> / H</p>
+<p class="fine">Two-dimensional Rayleigh–Bénard convection, periodic from left to right, with stationary fixed-temperature plates. D2Q9 moment collision for flow and D2Q5 thermal transport, coupled by Boussinesq buoyancy. Plate spacing: 64 lattice cells. Free-fall velocity U<sub>ff</sub> = 0.07 limits compressibility; Ra and Pr set ν and α. The grid gives a qualitative view at the upper end of the range; thin boundary layers need finer resolution. <a href="https://openlb.gitlab.io/release/examples/thermal/rayleighBenard2d.html" target="_blank" rel="noopener">About Rayleigh–Bénard convection</a>.</p>
+</main><script>
+ 'use strict';
+const CX=[0,1,0,-1,0,1,-1,-1,1],CY=[0,0,1,0,-1,1,1,-1,-1];
+const W=[4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36],OPP=[0,3,4,1,2,7,8,5,6];
+const WT=[1/3,1/6,1/6,1/6,1/6]; // D2Q5 temperature lattice, c_s^2=1/3
+class ThermalLBM {
+ constructor(nx=256,height=64){
+  this.nx=nx;this.H=height;this.ny=height+2;this.n=nx*this.ny;
+  const n=this.n;
+  for(const key of ['f','fn'])this[key]=new Float32Array(9*n);
+  for(const key of ['g','gn'])this[key]=new Float32Array(5*n);
+  for(const key of ['T','u','v','reference'])this[key]=new Float32Array(n);
+  this.dest=new Int32Array(9*n);this.wall=new Int8Array(5*n);
+  for(let y=1;y<=height;y++)for(let x=0;x<nx;x++)for(let i=0;i<9;i++){
+   const m=y*nx+x,yy=y+CY[i],q=yy*nx+(x+CX[i]+nx)%nx;
+   this.dest[i*n+m]=yy===0||yy===height+1?OPP[i]*n+m:i*n+q;
+   if(i<5)this.wall[i*n+m]=yy===0?-1:yy===height+1?1:0;
+  }
+ }
+ reset(Ra=30000,Pr=1,hotBelow=true,perturbation=.02){
+  this.Ra=Ra;this.Pr=Pr;this.hotBelow=hotBelow;this.time=0;
+  this.bottom=hotBelow?1:0;this.top=hotBelow?0:1;this.delta=this.bottom-this.top;
+  // Fix free-fall speed for low Mach number; Ra and Pr set transport rates.
+  this.freeFall=.07;this.buoyancy=this.freeFall*this.freeFall/this.H;
+  this.nu=this.freeFall*this.H*Math.sqrt(Pr/Ra);
+  this.alpha=this.freeFall*this.H/Math.sqrt(Ra*Pr);
+  this.omega=1/(3*this.nu+.5);this.omegaT=1/(3*this.alpha+.5);
+  const {nx,H,n}=this,tauT=1/this.omegaT;
+  this.u.fill(0);this.v.fill(0);this.f.fill(0);this.fn.fill(0);this.g.fill(0);this.gn.fill(0);
+  for(let y=1;y<=H;y++)for(let x=0;x<nx;x++){
+   const m=y*nx+x,z=(y-.5)/H,ref=this.bottom-this.delta*z;
+   const noise=perturbation*Math.sin(Math.PI*z)*(.8*Math.cos(4*Math.PI*(x+.5)/nx)+.2*Math.sin(2*Math.PI*(x+.5)/nx+.7));
+   const T=ref+noise;this.reference[m]=ref;this.T[m]=T;
+   for(let i=0;i<9;i++)this.f[i*n+m]=W[i];
+   // Include the conductive non-equilibrium heat flux at initialization.
+   for(let i=0;i<5;i++)this.g[i*n+m]=WT[i]*T+tauT*WT[i]*CY[i]*this.delta/H;
+  }
+  this.qBottom=this.alpha*this.delta/H;this.qTop=this.qBottom;
+  this.initialHeat=this.totalHeat();this.previousHeat=this.initialHeat;
+  this.injectedHeat=0;this.boundaryHeat=0;this.updateFields();
+ }
+ updateFields(){
+  const {nx,H,n,f,g,T,u,v,reference}=this;
+  for(let m=nx;m<(H+1)*nx;m++){
+   const temp=g[m]+g[n+m]+g[2*n+m]+g[3*n+m]+g[4*n+m];T[m]=temp;
+   const a=f[m],b=f[n+m],c=f[2*n+m],d=f[3*n+m],e=f[4*n+m];
+   const ff=f[5*n+m],gg=f[6*n+m],hh=f[7*n+m],ii=f[8*n+m];
+   const rho=a+b+c+d+e+ff+gg+hh+ii;
+   u[m]=(b-d+ff-gg-hh+ii)/rho;
+   v[m]=(c-e+ff+gg-hh-ii)/rho+.5*this.buoyancy*(temp-reference[m]);
+  }
+  for(let x=0;x<nx;x++){T[x]=this.bottom;T[(H+1)*nx+x]=this.top;}
+ }
+ step(){
+  const {nx,H,n,f,fn,g,gn,dest,wall,reference,omega,omegaT}=this;
+  let bottomHeat=0,topHeat=0;
+  for(let m=nx;m<(H+1)*nx;m++){
+   const temp=g[m]+g[n+m]+g[2*n+m]+g[3*n+m]+g[4*n+m];
+   // The conductive buoyancy is hydrostatic and is absorbed into pressure.
+   const ay=this.buoyancy*(temp-reference[m]);
+   const a=f[m],b=f[n+m],c=f[2*n+m],d=f[3*n+m],e=f[4*n+m];
+   const ff=f[5*n+m],gg=f[6*n+m],hh=f[7*n+m],ii=f[8*n+m];
+   const rho=a+b+c+d+e+ff+gg+hh+ii;
+   const u=(b-d+ff-gg-hh+ii)/rho,v=(c-e+ff+gg-hh-ii)/rho;
+   // Moment collision: shear relaxation and factorized higher moments.
+   let M11=hh-gg-ii+ff,Mdiff=d-c-e+b;
+   M11-=omega*(M11-rho*u*v);Mdiff-=omega*(Mdiff-rho*(u*u-v*v));
+   const Msum=rho*(3*u*u+3*v*v+2)/3;
+   const mu20=.5*(Msum+Mdiff)-rho*u*u,mu02=.5*(Msum-Mdiff)-rho*v*v,mu11=M11-rho*u*v;
+   const M21=v*mu20+2*u*mu11+rho*u*u*v,M12=u*mu02+2*v*mu11+rho*u*v*v;
+   const M22=(mu20*mu02+2*mu11*mu11)/rho+v*v*mu20+u*u*mu02+4*u*v*mu11+rho*u*u*v*v;
+   // Exact-difference buoyancy: feq(rho,u,v+ay)-feq(rho,u,v).
+   // This adds rho*ay vertical momentum and zero density at collision.
+   {
+    const i=0,cu=CX[i]*u+CY[i]*v,ca=CY[i]*ay;
+    const source=W[i]*rho*(3*ca+9*cu*ca+4.5*ca*ca-3*v*ay-1.5*ay*ay);
+    fn[dest[0*n+m]]=M22-Msum+rho+source;
+   }
+   {
+    const i=1,cu=CX[i]*u+CY[i]*v,ca=CY[i]*ay;
+    const source=W[i]*rho*(3*ca+9*cu*ca+4.5*ca*ca-3*v*ay-1.5*ay*ay);
+    fn[dest[1*n+m]]=Mdiff/4-M22/2-M12/2+Msum/4+rho*u/2+source;
+   }
+   {
+    const i=2,cu=CX[i]*u+CY[i]*v,ca=CY[i]*ay;
+    const source=W[i]*rho*(3*ca+9*cu*ca+4.5*ca*ca-3*v*ay-1.5*ay*ay);
+    fn[dest[2*n+m]]=Msum/4-M22/2-Mdiff/4-M21/2+rho*v/2+source;
+   }
+   {
+    const i=3,cu=CX[i]*u+CY[i]*v,ca=CY[i]*ay;
+    const source=W[i]*rho*(3*ca+9*cu*ca+4.5*ca*ca-3*v*ay-1.5*ay*ay);
+    fn[dest[3*n+m]]=M12/2-M22/2+Mdiff/4+Msum/4-rho*u/2+source;
+   }
+   {
+    const i=4,cu=CX[i]*u+CY[i]*v,ca=CY[i]*ay;
+    const source=W[i]*rho*(3*ca+9*cu*ca+4.5*ca*ca-3*v*ay-1.5*ay*ay);
+    fn[dest[4*n+m]]=M21/2-M22/2-Mdiff/4+Msum/4-rho*v/2+source;
+   }
+   {
+    const i=5,cu=CX[i]*u+CY[i]*v,ca=CY[i]*ay;
+    const source=W[i]*rho*(3*ca+9*cu*ca+4.5*ca*ca-3*v*ay-1.5*ay*ay);
+    fn[dest[5*n+m]]=(M11+M12+M21+M22)/4+source;
+   }
+   {
+    const i=6,cu=CX[i]*u+CY[i]*v,ca=CY[i]*ay;
+    const source=W[i]*rho*(3*ca+9*cu*ca+4.5*ca*ca-3*v*ay-1.5*ay*ay);
+    fn[dest[6*n+m]]=(M21-M12-M11+M22)/4+source;
+   }
+   {
+    const i=7,cu=CX[i]*u+CY[i]*v,ca=CY[i]*ay;
+    const source=W[i]*rho*(3*ca+9*cu*ca+4.5*ca*ca-3*v*ay-1.5*ay*ay);
+    fn[dest[7*n+m]]=(M11-M12-M21+M22)/4+source;
+   }
+   {
+    const i=8,cu=CX[i]*u+CY[i]*v,ca=CY[i]*ay;
+    const source=W[i]*rho*(3*ca+9*cu*ca+4.5*ca*ca-3*v*ay-1.5*ay*ay);
+    fn[dest[8*n+m]]=(M12-M11-M21+M22)/4+source;
+   }
+   const physicalV=v+.5*ay;
+   for(let i=0;i<5;i++){
+    const offset=i*n+m,cu=CX[i]*u+CY[i]*physicalV;
+    const post=g[offset]-omegaT*(g[offset]-WT[i]*temp*(1+3*cu));
+    if(wall[offset]){
+     // Fixed-temperature anti-bounce-back at the half-link plate location.
+     const plate=wall[offset]<0?this.bottom:this.top;
+     gn[OPP[i]*n+m]=2*WT[i]*plate-post;
+     if(wall[offset]<0)bottomHeat+=2*WT[i]*plate-2*post;
+     else topHeat+=2*post-2*WT[i]*plate;
+    }else{
+     // The same periodic neighbour map; only the population stride differs.
+     const target=dest[offset];gn[target]=post;
+    }
+   }
+  }
+  this.f=fn;this.fn=f;this.g=gn;this.gn=g;this.time++;
+  this.qBottom=bottomHeat/nx;this.qTop=topHeat/nx;
+  this.boundaryHeat+=bottomHeat-topHeat;
+ }
+ pulse(x,y,sign=1){
+  this.updateFields();let heat=0;
+  const {nx,H,n,g,T}=this,radius=5;
+  for(let yy=Math.max(1,Math.floor(y-3*radius));yy<=Math.min(H,Math.ceil(y+3*radius));yy++)
+   for(let xx=Math.floor(x-3*radius);xx<=Math.ceil(x+3*radius);xx++){
+    const m=yy*nx+(xx%nx+nx)%nx;
+    const amount=sign*.15*Math.exp(-((xx-x)**2+(yy-y)**2)/(2*radius*radius));
+    const dT=sign>0?Math.min(amount,Math.max(0,1-T[m])):Math.max(amount,-Math.max(0,T[m]));
+    for(let i=0;i<5;i++)g[i*n+m]+=WT[i]*dT;
+    heat+=dT;
+   }
+  this.injectedHeat+=heat;this.updateFields();
+ }
+ totalHeat(){const {nx,H,n,g}=this;let sum=0;for(let m=nx;m<(H+1)*nx;m++)for(let i=0;i<5;i++)sum+=g[i*n+m];return sum;}
+ diagnostics(){
+  this.updateFields();const {nx,H,n,f,T,u,v}=this;
+  let min=1,max=0,speed=0,vT=0,energy=0,mass=0;
+  for(let m=nx;m<(H+1)*nx;m++){
+   if(!Number.isFinite(T[m])||!Number.isFinite(u[m])||!Number.isFinite(v[m]))return {ok:false};
+   min=Math.min(min,T[m]);max=Math.max(max,T[m]);speed=Math.max(speed,Math.hypot(u[m],v[m]));
+   vT+=v[m]*T[m];energy+=u[m]*u[m]+v[m]*v[m];
+   for(let i=0;i<9;i++)mass+=f[i*n+m];
+  }
+  const cells=nx*H;
+  return {ok:min>-.15&&max<1.15&&speed<.2,min,max,speed,rms:Math.sqrt(energy/cells),
+   Nu:1+H*vT/(cells*this.alpha*this.delta),NuBottom:H*this.qBottom/(this.alpha*this.delta),NuTop:H*this.qTop/(this.alpha*this.delta),
+   massDrift:mass/cells-1,heatBalance:(this.totalHeat()-this.initialHeat-this.injectedHeat-this.boundaryHeat)/cells};
+ }
+}
+if(typeof module!=='undefined')module.exports={ThermalLBM};
+
+
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d');
+const sim=new ThermalLBM(),off=document.createElement('canvas');off.width=sim.nx;off.height=sim.ny;
+const oc=off.getContext('2d'),image=oc.createImageData(sim.nx,sim.ny),particles=new Float32Array(1200*2),nuHistory=[];
+let paused=false,broken=false,hotBelow=true,pulseSign=1,showTracers=true,showArrows=false;
+let lastD=null,previous=0,fps=24,nextFrameAt=0,nextCheck=0,stepCost=1,metricTime=performance.now(),metricStep=0,stepsPerSecond=0;
+function rayleigh(){return Number((100*Math.pow(1000,+$('ra').value/100)).toPrecision(3));}
+function labels(){$('raOut').textContent=rayleigh().toLocaleString('en-US');$('prOut').textContent=(+$('pr').value).toFixed(1);}
+function seed(k){particles[2*k]=Math.random()*sim.nx;particles[2*k+1]=1+Math.random()*(sim.H-1);}
+function reset(){
+ labels();sim.reset(rayleigh(),+$('pr').value,hotBelow);paused=false;broken=false;nextCheck=0;lastD=sim.diagnostics();nuHistory.length=0;
+ metricTime=performance.now();metricStep=0;stepsPerSecond=0;for(let k=0;k<particles.length/2;k++)seed(k);
+ $('pause').textContent='Pause';$('flip').textContent=hotBelow?'Heat from above':'Heat from below';$('heatingLabel').textContent=hotBelow?'Bottom hot · top cold':'Top hot · bottom cold';
+ record();report();draw();drawCharts();
+}
+function sample(field,x,y){
+ const xx=(x%sim.nx+sim.nx)%sim.nx,yy=Math.max(1,Math.min(sim.H-.001,y)),ix=Math.floor(xx),iy=Math.floor(yy),tx=xx-ix,ty=yy-iy;
+ const a=iy*sim.nx+ix,b=iy*sim.nx+(ix+1)%sim.nx;
+ return (1-ty)*((1-tx)*field[a]+tx*field[b])+ty*((1-tx)*field[a+sim.nx]+tx*field[b+sim.nx]);
+}
+function advect(dt){
+ for(let k=0;k<particles.length/2;k++){
+  let x=particles[2*k],y=particles[2*k+1],speed=Math.hypot(sample(sim.u,x,y),sample(sim.v,x,y));
+  const count=Math.max(1,Math.ceil(speed*dt/.3)),ds=dt/count;
+  for(let j=0;j<count;j++){const ux=sample(sim.u,x,y),vy=sample(sim.v,x,y);x=(x+ux*ds+sim.nx)%sim.nx;y=Math.max(1,Math.min(sim.H,y+vy*ds));}
+  particles[2*k]=x;particles[2*k+1]=y;
+ }
+}
+function draw(){
+ const {nx,ny,T,u,v}=sim;
+ for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+  const m=y*nx+x,t=Math.max(0,Math.min(1,T[m])),a=t<.5?[35,71,245]:[20,33,61],b=t<.5?[20,33,61]:[255,120,50],f=t<.5?2*t:2*t-1,p=4*((ny-1-y)*nx+x);
+  image.data[p]=a[0]+f*(b[0]-a[0]);image.data[p+1]=a[1]+f*(b[1]-a[1]);image.data[p+2]=a[2]+f*(b[2]-a[2]);image.data[p+3]=255;
+ }
+ oc.putImageData(image,0,0);ctx.imageSmoothingEnabled=true;ctx.drawImage(off,0,0,cv.width,cv.height);
+ const sx=cv.width/nx,sy=cv.height/ny;
+ if(showTracers){ctx.fillStyle='rgba(255,255,255,.75)';for(let k=0;k<particles.length/2;k++)ctx.fillRect((particles[2*k]+.5)*sx,(ny-.5-particles[2*k+1])*sy,2,2);}
+ if(showArrows){ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=1;
+  for(let y=4;y<=sim.H;y+=6)for(let x=4;x<nx;x+=8){const m=y*nx+x,dx=u[m]*sx*65,dy=-v[m]*sy*65,len=Math.hypot(dx,dy);if(len<1)continue;
+   const ax=(x+.5)*sx,ay=(ny-.5-y)*sy;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(ax+dx,ay+dy);ctx.lineTo(ax+dx-3*dx/len+2*dy/len,ay+dy-3*dy/len-2*dx/len);ctx.moveTo(ax+dx,ay+dy);ctx.lineTo(ax+dx-3*dx/len-2*dy/len,ay+dy-3*dy/len+2*dx/len);ctx.stroke();
+  }
+ }
+ ctx.fillStyle='rgba(14,20,36,.8)';ctx.fillRect(8,8,240,25);ctx.fillStyle='#eef1ff';ctx.font='14px system-ui';ctx.fillText(hotBelow?'Bottom heated · gravity ↓':'Top heated · gravity ↓',16,26);
+}
+function chartFrame(id){
+ const canvas=$(id),c=canvas.getContext('2d'),w=canvas.width,h=canvas.height,dark=matchMedia('(prefers-color-scheme: dark)').matches;
+ c.clearRect(0,0,w,h);c.font='13px system-ui';c.strokeStyle=dark?'#7684a0':'#a1aac0';c.fillStyle=dark?'#c0cbea':'#4a5568';c.lineWidth=1;
+ const l=48,r=w-18,t=14,b=h-35;c.beginPath();c.moveTo(l,t);c.lineTo(l,b);c.lineTo(r,b);c.stroke();return {c,w,h,l,r,t,b};
+}
+function drawCharts(){
+ let {c,w,h,l,r,t,b}=chartFrame('profile');
+ const px=T=>l+(r-l)*T,py=z=>b-(b-t)*z;
+ c.fillText('1',23,t+5);c.fillText('0',23,b+4);c.fillText('0',l-3,b+19);c.fillText('1',r-3,b+19);c.fillText('Temperature',w/2-34,h-3);c.fillText('z/H',9,11);
+ c.setLineDash([6,5]);c.strokeStyle='#8893a8';c.beginPath();c.moveTo(px(sim.bottom),py(0));c.lineTo(px(sim.top),py(1));c.stroke();c.setLineDash([]);
+ c.strokeStyle='#2347f5';c.lineWidth=2;c.beginPath();c.moveTo(px(sim.bottom),py(0));
+ for(let y=1;y<=sim.H;y++){let avg=0;for(let x=0;x<sim.nx;x++)avg+=sim.T[y*sim.nx+x];c.lineTo(px(avg/sim.nx),py((y-.5)/sim.H));}c.lineTo(px(sim.top),py(1));c.stroke();
+ ({c,w,h,l,r,t,b}=chartFrame('history'));
+ const ymax=Math.max(2,Math.ceil(Math.max(...nuHistory.map(p=>p.nu),1)*1.1));
+ const first=nuHistory[0]?.time||0,last=nuHistory[nuHistory.length-1]?.time||1;
+ const hx=time=>l+(r-l)*(time-first)/Math.max(.01,last-first),hy=nu=>b-(b-t)*nu/ymax;
+ c.fillText('Nu',10,12);c.fillText(String(ymax),12,t+5);c.fillText('0',25,b+4);c.fillText(first.toFixed(1),l-8,b+19);c.fillText(last.toFixed(1),r-20,b+19);c.fillText('Simulation time t*',w/2-52,h-3);
+ c.setLineDash([6,5]);c.strokeStyle='#8893a8';c.beginPath();c.moveTo(l,hy(1));c.lineTo(r,hy(1));c.stroke();c.setLineDash([]);c.fillText('1',25,hy(1)+4);
+ c.strokeStyle='#2347f5';c.lineWidth=2;c.beginPath();nuHistory.forEach((p,i)=>{if(i)c.lineTo(hx(p.time),hy(p.nu));else c.moveTo(hx(p.time),hy(p.nu));});c.stroke();
+}
+function record(){if(lastD?.ok){nuHistory.push({time:sim.time*sim.freeFall/sim.H,nu:(lastD.NuBottom+lastD.NuTop)/2});if(nuHistory.length>100)nuHistory.shift();}}
+function report(){
+ const d=lastD||sim.diagnostics();
+ if(!d.ok)return;
+ $('stats').innerHTML='<span>Nu (plates) <b>'+((d.NuBottom+d.NuTop)/2).toFixed(2)+'</b></span><span>Bottom <b>'+d.NuBottom.toFixed(2)+'</b> · top <b>'+d.NuTop.toFixed(2)+'</b></span><span>RMS speed <b>'+d.rms.toExponential(2)+'</b></span><span>t* <b>'+(sim.time*sim.freeFall/sim.H).toFixed(1)+'</b></span><span><b>'+Math.round(fps)+' fps</b> · '+Math.round(stepsPerSecond)+' steps/s</span>';
+ if(!broken)$('warn').textContent=paused?'Paused.':!hotBelow?'Heated from above: stable stratification. Add a pulse to test its response.':sim.Ra<1400?'Diffusion dominates: disturbances should fade.':sim.time<5000?'Developing from a small temperature disturbance.':d.rms<3e-4?'Motion is weak. Add a pulse or raise Rayleigh number.':'Convection evolves; compare heat transport with the Nu = 1 reference.';
+}
+function frame(){
+ const now=performance.now();if(document.visibilityState==='hidden'){previous=0;nextFrameAt=0;setTimeout(frame,250);return;}
+ if(previous){const dt=now-previous;if(dt>0&&dt<1000)fps=.9*fps+.1*1000/dt;}previous=now;if(!nextFrameAt)nextFrameAt=now;
+ if(!paused&&!broken){const start=performance.now();let count=0;
+  do{sim.step();count++;}while(performance.now()-start+stepCost<30&&count<256);
+  stepCost=(performance.now()-start)/count;sim.updateFields();
+  if(sim.time>=nextCheck){lastD=sim.diagnostics();nextCheck=sim.time+128;if(!lastD.ok){broken=true;paused=true;$('pause').textContent='Resume';$('warn').textContent='Numerical limit reached. Lower Rayleigh number and reset.';}}
+  if(showTracers&&!broken)advect(count);
+ }
+ draw();if(now-metricTime>700){stepsPerSecond=(sim.time-metricStep)*1000/(now-metricTime);metricTime=now;metricStep=sim.time;record();report();drawCharts();}
+ nextFrameAt+=1000/24;const end=performance.now();if(nextFrameAt<end)nextFrameAt=end+1;setTimeout(frame,Math.max(0,nextFrameAt-end));
+}
+$('reset').onclick=reset;$('pause').onclick=()=>{if(broken){reset();return;}paused=!paused;$('pause').textContent=paused?'Resume':'Pause';report();};
+$('flip').onclick=()=>{hotBelow=!hotBelow;reset();};
+$('pulse').onclick=()=>{pulseSign=-pulseSign;$('pulse').textContent=pulseSign>0?'Pulse: warm':'Pulse: cool';$('pulseHint').textContent='Click or tap the fluid to add a bounded '+(pulseSign>0?'warm':'cool')+' pulse.';};
+$('tracers').onclick=()=>{showTracers=!showTracers;$('tracers').textContent='Tracers: '+(showTracers?'on':'off');$('tracers').setAttribute('aria-pressed',String(showTracers));};
+$('arrows').onclick=()=>{showArrows=!showArrows;$('arrows').textContent='Velocity arrows: '+(showArrows?'on':'off');$('arrows').setAttribute('aria-pressed',String(showArrows));};
+for(const id of ['ra','pr']){$(id).addEventListener('input',labels);$(id).addEventListener('change',reset);}
+cv.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse'&&e.button!==0||broken)return;
+ const r=cv.getBoundingClientRect(),x=(e.clientX-r.left-cv.clientLeft)/cv.clientWidth*sim.nx-.5,y=sim.ny-.5-(e.clientY-r.top-cv.clientTop)/cv.clientHeight*sim.ny;
+ sim.pulse(Math.max(0,Math.min(sim.nx-1,x)),Math.max(1,Math.min(sim.H,y)),pulseSign);lastD=sim.diagnostics();report();draw();drawCharts();
+});
+$('code').textContent=[ThermalLBM.prototype.reset,ThermalLBM.prototype.step,ThermalLBM.prototype.pulse].map(f=>f.toString()).join('\n\n');$('lines').textContent=$('code').textContent.split('\n').length;
+reset();setTimeout(frame,0);
+</script></body></html>

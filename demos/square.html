@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LBM: flow over a square</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+:root{--bg:#FFFFFF;--fg:#14213D;--muted:#4A5568;--panel:#F1F4FF;--accent:#2347F5;--hot:#C2410C;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}}
+:root[data-theme="dark"]{--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:'DM Sans',system-ui,sans-serif;line-height:1.45}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 32px}
+h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:clamp(32px,6vw,52px);line-height:1;margin:0;color:var(--accent)}
+h2{font-family:'Space Grotesk',system-ui,sans-serif;font-size:20px;margin:0 0 6px}
+.sub{margin:8px 0 16px;font-size:17px}
+canvas{width:100%;aspect-ratio:8/3;display:block;background:#14213D;border:2px solid var(--fg)}
+.ctl{background:var(--panel);padding:12px;margin:10px 0 18px;display:flex;flex-direction:column;gap:8px}
+.ctl label{font-weight:700;display:flex;justify-content:space-between;gap:8px}
+input[type=range]{width:100%;min-height:44px}
+button{min-height:44px;padding:0 16px;font:inherit;font-weight:700;background:var(--accent);color:var(--bg);border:0;cursor:pointer}
+button.alt{background:var(--panel);color:var(--fg);border:2px solid var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.stats{font-size:14px;color:var(--muted)}
+.warn{color:var(--hot);font-weight:700;min-height:1.4em}
+.codebox{overflow:auto;background:var(--panel);padding:10px 12px;max-height:560px}
+pre{margin:0;font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.note{font-size:14px;margin-top:12px}
+</style>
+<link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/demos.css"><link rel="stylesheet" href="../assets/demo-common.css"></head>
+<body><a class="skip-link" href="#main-content">Skip to content</a>
+<nav class="site-nav" aria-label="Site navigation"><a href="../index.html#menu">Menu</a><a href="../index.html#play">Play</a><a href="../how.html">How LBM works</a><a href="../research.html">Research</a><a href="../gallery.html">Gallery</a></nav><nav class="demo-nav" aria-label="Simulation demos"><a href="lid.html">Lid-driven cavity</a><a href="square.html" aria-current="page">Flow over a square</a><a href="porous.html">Porous flow</a><a href="droplet.html">Droplet impact</a><a href="invasion.html">Capillary invasion</a><a href="convection.html">Natural convection</a></nav>
+<main id="main-content">
+<h1>Flow over a square</h1>
+<p class="sub">Particles that only <b>collide</b> and <b>stream</b>, and a square in their way. Push the Reynolds number up and watch the wake come alive. The whole solver is below (<span id="lines">…</span> lines).</p>
+<canvas id="cv" width="960" height="360" aria-label="Vorticity of the flow past a square obstacle, flowing left to right"></canvas>
+<div class="ctl">
+<label for="re"><span>Reynolds number</span><span id="reOut">1000</span></label>
+<input id="re" type="range" min="0" max="100" value="60">
+<div class="row">
+<button id="pause" type="button">Pause</button>
+<button id="reset" type="button">Reset</button>
+<button id="view" type="button" class="alt">View: vorticity</button>
+</div>
+<div class="stats" id="stats"></div>
+<div class="warn" id="warn" role="status"></div>
+</div>
+<h2>The entire solver</h2>
+<div class="codebox"><pre id="code"></pre></div>
+<p class="note">Flow runs left to right. The top, bottom and inlet are walls moving with the stream, and the outlet copies populations from upstream. Below Re &asymp; 50 the wake is steady, and above it the wake sheds. At the top of the range the lattice is far too coarse to be accurate, but it stays stable and keeps swirling. Research codes add curved walls, multiphase flow, GPUs and much more.</p>
+</main>
+<script>
+const D = 10, NX = 32 * D, NY = 12 * D, N = NX * NY, U = 0.1;
+const CX = [0, 1, 0, -1, 0, 1, -1, -1, 1];
+const CY = [0, 0, 1, 0, -1, 1, 1, -1, -1];
+const OPP = [0, 3, 4, 1, 2, 7, 8, 5, 6];
+const OFF = CX.map((c, i) => CY[i] * NX + c);
+const W = [4/9, 1/9, 1/9, 1/9, 1/9, 1/36, 1/36, 1/36, 1/36];
+const P = new Float32Array(9);
+const typ = new Uint8Array(N);   // 0 fluid, 1 moving wall, 2 solid square, 3 outlet
+
+function step(f, fn, omega) {
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const n = y * NX + x, t = typ[n];
+    if (t === 0) {
+      const f00 = f[n], fp0 = f[N+n], f0p = f[2*N+n], fm0 = f[3*N+n], f0m = f[4*N+n],
+            fpp = f[5*N+n], fmp = f[6*N+n], fmm = f[7*N+n], fpm = f[8*N+n];
+      // 1. moments: density and velocity
+      const rho = f00 + fp0 + f0p + fm0 + f0m + fpp + fmp + fmm + fpm;
+      const u = (fp0 - fm0 + fpp - fmp - fmm + fpm) / rho;
+      const v = (f0p - f0m + fpp + fmp - fmm - fpm) / rho;
+      // 2. collide: relax the shear stresses with omega, set the higher moments to equilibrium
+      let M11 = fmm - fmp - fpm + fpp;
+      let M20m02 = fm0 - f0p - f0m + fp0;
+      M11 -= omega * (M11 - rho*u*v);
+      M20m02 -= omega * (M20m02 - rho*(u*u - v*v));
+      const M20p02 = rho*(3*u*u + 3*v*v + 2) / 3;
+      const mu20 = 0.5*(M20p02 + M20m02) - rho*u*u;
+      const mu02 = 0.5*(M20p02 - M20m02) - rho*v*v;
+      const mu11 = M11 - rho*u*v;
+      const M21 = v*mu20 + 2*u*mu11 + rho*u*u*v;
+      const M12 = u*mu02 + 2*v*mu11 + rho*u*v*v;
+      const M22 = (mu20*mu02 + 2*mu11*mu11) / rho + v*v*mu20 + u*u*mu02 + 4*u*v*mu11 + rho*u*u*v*v;
+      P[0] = M22 - M20p02 + rho;
+      P[1] = M20m02/4 - M22/2 - M12/2 + M20p02/4 + rho*u/2;
+      P[2] = M20p02/4 - M22/2 - M20m02/4 - M21/2 + rho*v/2;
+      P[3] = M12/2 - M22/2 + M20m02/4 + M20p02/4 - rho*u/2;
+      P[4] = M21/2 - M22/2 - M20m02/4 + M20p02/4 - rho*v/2;
+      P[5] = (M11 + M12 + M21 + M22) / 4;
+      P[6] = (M21 - M12 - M11 + M22) / 4;
+      P[7] = (M11 - M12 - M21 + M22) / 4;
+      P[8] = (M12 - M11 - M21 + M22) / 4;
+      // 3. stream: every population hops to its neighbor
+      for (let i = 0; i < 9; i++) fn[i*N + n + OFF[i]] = P[i];
+    } else if (t !== 3) {
+      // wall or square: every population turns around (moving walls add momentum)
+      const uw = t === 1 ? U : 0;
+      for (let i = 1; i < 9; i++) {
+        const X = x + CX[i], Y = y + CY[i];
+        if (X >= 0 && X < NX && Y >= 0 && Y < NY)
+          fn[i*N + n + OFF[i]] = f[OPP[i]*N + n] + 6 * W[i] * CX[i] * uw;
+      }
+    }
+  }
+  // outlet: populations moving left are copied from one node upstream
+  for (let y = 1; y < NY - 1; y++) {
+    const m = y * NX + NX - 2;
+    fn[3*N + m] = f[3*N + m - 1]; fn[6*N + m] = f[6*N + m - 1]; fn[7*N + m] = f[7*N + m - 1];
+  }
+}
+
+for (let n = 0; n < N; n++) {
+  const x = n % NX, y = (n / NX) | 0;
+  typ[n] = (y === 0 || y === NY - 1 || x === 0) ? 1 : (x === NX - 1) ? 3 : 0;
+}
+const SX0 = 6 * D - D / 2, SY0 = NY / 2 - D / 2 + 1;
+for (let y = SY0; y < SY0 + D; y++) for (let x = SX0; x < SX0 + D; x++) typ[y * NX + x] = 2;
+
+let f = new Float32Array(9 * N), fn = new Float32Array(9 * N);
+const ux = new Float32Array(N), uy = new Float32Array(N);
+const NT = 1500, tr = new Float32Array(2 * NT);
+let omega = 1.9, Re = 1000, paused = false, mlups = 0, tick = 0, steps = 8, mode = 0;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const off = document.createElement('canvas'); off.width = NX; off.height = NY;
+const octx = off.getContext('2d'), img = octx.createImageData(NX, NY);
+
+function seed(k) { tr[2*k] = 1 + Math.random() * 3; tr[2*k+1] = 1 + Math.random() * (NY - 3); }
+function init() {
+  for (let i = 0; i < 9; i++) {
+    const cu = CX[i] * U, e = W[i] * (1 + 3*cu + 4.5*cu*cu - 1.5*U*U);
+    f.fill(e, i * N, (i + 1) * N); fn.fill(e, i * N, (i + 1) * N);
+  }
+  for (let k = 0; k < NT; k++) { seed(k); tr[2*k] = Math.random() * (NX - 2); }
+  document.getElementById('warn').textContent = '';
+}
+function setRe() {
+  Re = Math.round(20 * Math.pow(500, document.getElementById('re').value / 100));
+  omega = 1 / (3 * U * D / Re + 0.5);
+  document.getElementById('reOut').textContent = Re;
+}
+function mix(a, b, t) { return a + (b - a) * t; }
+const BASE = [20, 33, 61], BLUE = [60, 110, 255], ORANGE = [255, 120, 50], HOT = [255, 210, 63];
+function draw() {
+  for (let n = 0; n < N; n++) {
+    if (typ[n] !== 0) { ux[n] = typ[n] === 1 ? U : 0; uy[n] = 0; continue; }
+    const r = f[n] + f[N+n] + f[2*N+n] + f[3*N+n] + f[4*N+n] + f[5*N+n] + f[6*N+n] + f[7*N+n] + f[8*N+n];
+    ux[n] = (f[N+n] - f[3*N+n] + f[5*N+n] - f[6*N+n] - f[7*N+n] + f[8*N+n]) / r;
+    uy[n] = (f[2*N+n] - f[4*N+n] + f[5*N+n] + f[6*N+n] - f[7*N+n] - f[8*N+n]) / r;
+  }
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const n = y * NX + x, p = 4 * ((NY - 1 - y) * NX + x);
+    let c;
+    if (typ[n] === 2) c = [238, 241, 255];
+    else if (mode === 0) {
+      const inner = x > 0 && x < NX - 1 && y > 0 && y < NY - 1;
+      const w = inner ? (uy[n+1] - uy[n-1] - ux[n+NX] + ux[n-NX]) / 2 : 0;
+      const t = Math.min(1, Math.abs(w) / (2.5 * U / D));
+      c = w > 0 ? [mix(BASE[0], ORANGE[0], t), mix(BASE[1], ORANGE[1], t), mix(BASE[2], ORANGE[2], t)]
+                : [mix(BASE[0], BLUE[0], t), mix(BASE[1], BLUE[1], t), mix(BASE[2], BLUE[2], t)];
+    } else {
+      const s = Math.min(1, Math.hypot(ux[n], uy[n]) / (1.6 * U));
+      const a = s < 0.5 ? BASE : BLUE, b = s < 0.5 ? BLUE : HOT, t = s < 0.5 ? s * 2 : (s - 0.5) * 2;
+      c = [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];
+    }
+    img.data[p] = c[0]; img.data[p+1] = c[1]; img.data[p+2] = c[2]; img.data[p+3] = 255;
+  }
+  octx.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(off, 0, 0, cv.width, cv.height);
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  const k = cv.width / NX;
+  for (let j = 0; j < NT; j++) ctx.fillRect(tr[2*j] * k, (NY - 1 - tr[2*j+1]) * k, 2, 2);
+}
+function advect() {
+  for (let j = 0; j < NT; j++) {
+    const n = Math.round(tr[2*j+1]) * NX + Math.round(tr[2*j]);
+    tr[2*j] += ux[n] * steps; tr[2*j+1] += uy[n] * steps;
+    const q = Math.round(tr[2*j+1]) * NX + Math.round(tr[2*j]);
+    if (tr[2*j] > NX - 3 || tr[2*j+1] < 1 || tr[2*j+1] > NY - 2 || typ[q] !== 0) seed(j);
+  }
+}
+function frame() {
+  if (!paused) {
+    const t0 = performance.now();
+    for (let s = 0; s < steps; s++) { step(f, fn, omega); const tmp = f; f = fn; fn = tmp; }
+    const dt = performance.now() - t0;
+    mlups = mix(mlups, N * steps / dt / 1e3, 0.1);
+    steps = Math.max(1, Math.min(40, Math.round(mix(steps, 12 / (dt / steps), 0.3))));
+    advect();
+    if (!isFinite(f[4 * N + (NY >> 1) * NX + (NX * 3 >> 2)])) {
+      document.getElementById('warn').textContent = 'It blew up: \u03C4 got too close to \u00BD. Lower Re and press Reset.';
+      paused = true; document.getElementById('pause').textContent = 'Resume';
+    }
+  }
+  draw();
+  if (++tick % 15 === 0)
+    document.getElementById('stats').textContent = '\u03C9 = ' + omega.toFixed(4) + '   ' + D + ' cells across the square   ' + mlups.toFixed(1) + ' million lattice updates/s on this device';
+  requestAnimationFrame(frame);
+}
+document.getElementById('code').textContent = step.toString();
+document.getElementById('lines').textContent = step.toString().split('\n').length;
+document.getElementById('re').addEventListener('input', setRe);
+document.getElementById('pause').addEventListener('click', function () {
+  paused = !paused; this.textContent = paused ? 'Resume' : 'Pause';
+});
+document.getElementById('reset').addEventListener('click', function () {
+  init(); paused = false; document.getElementById('pause').textContent = 'Pause';
+});
+document.getElementById('view').addEventListener('click', function () {
+  mode = 1 - mode; this.textContent = 'View: ' + (mode ? 'speed' : 'vorticity');
+});
+init(); setRe(); requestAnimationFrame(frame);
+</script>
+</body>
+</html>

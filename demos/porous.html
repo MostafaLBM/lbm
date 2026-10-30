@@ -1,0 +1,210 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LBM: flow through porous rock</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+:root{--bg:#FFFFFF;--fg:#14213D;--muted:#4A5568;--panel:#F1F4FF;--accent:#2347F5;--hot:#C2410C;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}}
+:root[data-theme="dark"]{--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:'DM Sans',system-ui,sans-serif;line-height:1.45}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 32px}
+h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:clamp(34px,7vw,56px);line-height:1;margin:0;color:var(--accent)}
+.sub{margin:8px 0 18px;font-size:17px}
+.wrap{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.left{flex:1 1 340px;max-width:560px}
+.right{flex:1 1 360px;min-width:0}
+canvas{width:100%;aspect-ratio:1;display:block;background:#14213D;border:2px solid var(--fg)}
+.lid{font-size:13px;color:var(--muted);margin:0 0 4px;text-align:center}
+.ctl{background:var(--panel);padding:12px;margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.ctl label{font-weight:700;display:flex;justify-content:space-between;gap:8px}
+input[type=range]{width:100%;min-height:44px}
+button{min-height:44px;padding:0 16px;font:inherit;font-weight:700;background:var(--accent);color:var(--bg);border:0;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.stats{font-size:14px;color:var(--muted)}
+.warn{color:var(--hot);font-weight:700;min-height:1.4em}
+h2{font-family:'Space Grotesk',system-ui,sans-serif;font-size:20px;margin:0 0 6px}
+.codebox{overflow-x:auto;background:var(--panel);padding:10px 12px;max-height:520px;overflow-y:auto}
+pre{margin:0;font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.note{font-size:14px;margin-top:12px}
+
+canvas{aspect-ratio:12/7;box-sizing:border-box;touch-action:none;cursor:crosshair}
+button.alt{background:var(--panel);color:var(--fg);border:2px solid var(--accent)}
+.controls{display:flex;flex-direction:column;gap:8px}.controls label{display:flex;justify-content:space-between;font-weight:700}.controls input{width:100%}
+.readouts{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}.readouts b{color:var(--fg)}
+.hint{font-size:13px;color:var(--muted)}button[aria-pressed=true]{outline:3px solid var(--hot);outline-offset:2px}
+input[type=number]{box-sizing:border-box;min-height:44px;background:var(--bg);color:var(--fg);border:1px solid var(--muted);font:inherit;padding:6px;width:100%}
+pre{tab-size:2}.fine{font-size:13px;color:var(--muted)}
+</style><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/demos.css"><link rel="stylesheet" href="../assets/demo-common.css"></head><body><a class="skip-link" href="#main-content">Skip to content</a>
+<nav class="site-nav" aria-label="Site navigation"><a href="../index.html#menu">Menu</a><a href="../index.html#play">Play</a><a href="../how.html">How LBM works</a><a href="../research.html">Research</a><a href="../gallery.html">Gallery</a></nav><nav class="demo-nav" aria-label="Simulation demos"><a href="lid.html">Lid-driven cavity</a><a href="square.html">Flow over a square</a><a href="porous.html" aria-current="page">Porous flow</a><a href="droplet.html">Droplet impact</a><a href="invasion.html">Capillary invasion</a><a href="convection.html">Natural convection</a></nav><main id="main-content">
+<h1>Flow through porous rock</h1>
+<p class="sub">A network of pores, solved by particles that only <b>collide</b> and <b>stream</b>. Watch fluid find its way through the rock. The core solver is on the right (<span id="lines">…</span> lines).</p>
+<div class="wrap"><div class="left">
+<canvas id="cv" width="960" height="560" aria-label="Flow speed and tracers in an editable porous material"></canvas>
+<div class="ctl"><div class="controls">
+<div><label for="porosity">Target pore space <span id="porOut"></span></label><input id="porosity" type="range" min="35" max="85" value="65"></div>
+<div><label for="grain">Grain size <span id="grainOut"></span></label><input id="grain" type="range" min="5" max="15" value="9"></div>
+<div><label for="drive">Driving force <span id="driveOut"></span></label><input id="drive" type="range" min="0" max="100" value="35"></div>
+<div><label for="seed">Sample seed</label><input id="seed" type="number" min="0" max="4294967295" step="1" value="2718"></div>
+</div><div class="row"><button id="new">New sample</button><button id="generate" class="alt">Apply seed</button><button id="pause">Pause</button><button id="reset" class="alt">Restart flow</button><button id="paint" class="alt" aria-pressed="true">Add rock</button><button id="erase" class="alt" aria-pressed="false">Erase rock</button><button id="tracers" class="alt">Tracers: on</button></div>
+<div class="readouts" id="stats"></div><div class="warn" id="warn" role="status"></div>
+<div class="hint">Drag to edit the rock. Light = solid · blue → gold = increasing speed (fixed scale, 0–0.03 lattice units). The sample repeats at its edges; particles leaving the right return on the left.</div></div>
+
+</div><div class="right"><h2>The core solver</h2>
+<div class="codebox"><pre id="code"></pre></div>
+<p class="note">Try it: add rock across a busy throat and watch the flow find another path. Erase rock to open a passage, or generate a new sample. Porosity and grain size rebuild the material; driving force changes the flow through the current sample.</p>
+<p class="note">The driving force is a gentle, uniform acceleration to the right. Stationary grains resist the flow through viscous drag. The material repeats at its edges, so fluid leaving one side returns on the opposite side.</p>
+<p class="note">D2Q9 lattice Boltzmann with BGK collision, Guo forcing and bounce-back at solid surfaces. Porosity is the fraction of open space; permeability measures how easily the material carries flow. The permeability estimate appears once low-Reynolds-number flow settles.</p>
+<p class="fine">A two-dimensional model. Narrow pore throats need several lattice cells to resolve; the force is reduced automatically if speeds approach the numerical limit.</p>
+</div></div></main><script>
+
+'use strict';
+const NX=192, NY=112, N=NX*NY, TAU=0.9, OMEGA=1/TAU, NU=(TAU-0.5)/3;
+const CX=[0,1,0,-1,0,1,-1,-1,1], CY=[0,0,1,0,-1,1,1,-1,-1];
+const W=[4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36], OPP=[0,3,4,1,2,7,8,5,6];
+const solid=new Uint8Array(N), ux=new Float32Array(N), uy=new Float32Array(N);
+let f=new Float32Array(9*N), fn=new Float32Array(9*N);
+const neighbor=new Int32Array(9*N);
+for(let i=0;i<9;i++)for(let y=0;y<NY;y++)for(let x=0;x<NX;x++)
+  neighbor[i*N+y*NX+x]=((y+CY[i]+NY)%NY)*NX+(x+CX[i]+NX)%NX;
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d');
+const off=document.createElement('canvas');off.width=NX;off.height=NY;
+const oc=off.getContext('2d'),image=oc.createImageData(NX,NY);
+let paused=false,showTracers=true,tool='paint',pointer=null,iteration=0;
+let poreCount=0,connected=false,appliedForce=0,maxSpeed=0,meanFlux=0,poreRe=0,stable=0,lastFlux=null,edited=false;
+const tracers=new Float32Array(1200*2), history=[];
+function rng(seed){return ()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t^=t+Math.imul(t^t>>>7,61|t);return ((t^t>>>14)>>>0)/4294967296;};}
+function seedTracer(k){for(let j=0;j<100;j++){const n=(Math.random()*N)|0;if(!solid[n]){tracers[2*k]=n%NX;tracers[2*k+1]=(n/NX)|0;return;}}tracers[2*k]=-1;}
+function resetFlow(){
+  for(let i=0;i<9;i++){f.fill(W[i],i*N,(i+1)*N);fn.fill(W[i],i*N,(i+1)*N);}
+  ux.fill(0);uy.fill(0);iteration=0;maxSpeed=0;meanFlux=0;stable=0;lastFlux=null;history.length=0;
+  appliedForce=0;for(let k=0;k<tracers.length/2;k++)seedTracer(k);
+}
+function topology(){
+  poreCount=0;for(let n=0;n<N;n++)if(!solid[n])poreCount++;
+  // Track unwrapped x along cardinal links. A winding loop crosses the
+  // periodic sample horizontally; diagonal-only contacts do not count.
+  const seen=new Uint8Array(N),lift=new Int32Array(N),queue=new Int32Array(N);
+  connected=false;
+  for(let root=0;root<N;root++)if(!solid[root]&&!seen[root]){
+    let head=0,tail=1;queue[0]=root;seen[root]=1;lift[root]=0;
+    while(head<tail){const n=queue[head++];for(let i=1;i<=4;i++){
+      const m=neighbor[i*N+n];if(solid[m])continue;
+      const next=lift[n]+CX[i];
+      if(!seen[m]){seen[m]=1;lift[m]=next;queue[tail++]=m;}
+      else if(lift[m]!==next)connected=true;
+    }}
+  }
+}
+function generate(){
+  const seed=Number($('seed').value)>>>0;$('seed').value=seed;
+  const random=rng(seed),radius=+$('grain').value,target=+$('porosity').value/100;
+  const count=Math.ceil(N/(Math.PI*radius*radius)*0.9),grains=[];
+  for(let i=0;i<count;i++)grains.push([random()*NX,random()*NY,radius*(0.7+0.6*random())]);
+  function mask(scale){solid.fill(0);for(const [cx,cy,r0] of grains){const r=r0*scale;
+    for(let y=Math.floor(cy-r);y<=Math.ceil(cy+r);y++)for(let x=Math.floor(cx-r);x<=Math.ceil(cx+r);x++)
+      if((x-cx)**2+(y-cy)**2<=r*r)solid[((y%NY+NY)%NY)*NX+(x%NX+NX)%NX]=1;
+  }let count=0;for(const v of solid)count+=1-v;return count/N;}
+  let lo=0,hi=3;for(let j=0;j<18;j++){const mid=(lo+hi)/2;if(mask(mid)>target)lo=mid;else hi=mid;}
+  mask((lo+hi)/2);edited=false;topology();resetFlow();labels();
+}
+function step(force){
+  fn.fill(0);
+  for(let n=0;n<N;n++){
+    if(solid[n])continue;
+    let rho=0,jx=0,jy=0;
+    for(let i=0;i<9;i++){const v=f[i*N+n];rho+=v;jx+=v*CX[i];jy+=v*CY[i];}
+    const fx=rho*force,u=(jx+0.5*fx)/rho,v=jy/rho,uu=u*u+v*v;
+    for(let i=0;i<9;i++){
+      const cu=CX[i]*u+CY[i]*v;
+      const eq=W[i]*rho*(1+3*cu+4.5*cu*cu-1.5*uu);
+      const source=(1-0.5*OMEGA)*W[i]*fx*(3*(CX[i]-u)+9*cu*CX[i]);
+      const post=f[i*N+n]+OMEGA*(eq-f[i*N+n])+source;
+      const m=neighbor[i*N+n];
+      if(solid[m])fn[OPP[i]*N+n]=post;
+      else fn[i*N+m]=post;
+    }
+  }
+  const temp=f;f=fn;fn=temp;
+}
+function measure(){
+  let sum=0;maxSpeed=0;
+  for(let n=0;n<N;n++){
+    if(solid[n]){ux[n]=uy[n]=0;continue;}
+    let rho=0,jx=0,jy=0;for(let i=0;i<9;i++){const a=f[i*N+n];rho+=a;jx+=a*CX[i];jy+=a*CY[i];}
+    ux[n]=jx/rho+0.5*appliedForce;uy[n]=jy/rho;
+    const speed=Math.hypot(ux[n],uy[n]);
+    if(!Number.isFinite(speed)||rho<0.1||rho>3)return false;
+    maxSpeed=Math.max(maxSpeed,speed);sum+=ux[n];
+  }
+  meanFlux=sum/N;poreRe=Math.abs(meanFlux)/(poreCount/N||1)*(2*+$('grain').value)/NU;
+  return true;
+}
+function labels(){
+  $('porOut').textContent=$('porosity').value+'%';$('grainOut').textContent=$('grain').value+' cells';
+  $('driveOut').textContent=(2e-4*+$('drive').value/100).toExponential(1);
+}
+function report(){
+  const desired=2e-4*+$('drive').value/100;
+  history.push(meanFlux);if(history.length>16)history.shift();
+  const average=history.reduce((a,b)=>a+b,0)/history.length;
+  const spread=Math.max(...history)-Math.min(...history);
+  const settled=history.length===16&&iteration>=3000&&spread<Math.max(1e-9,Math.abs(average)*0.002);
+  const k=settled&&connected&&appliedForce>0&&poreRe<1? (NU*meanFlux/appliedForce).toFixed(2)+' lu²':'—';
+  $('stats').innerHTML='<span>Pore space <b>'+ (100*poreCount/N).toFixed(1)+'%</b></span><span>Mean flux <b>'+meanFlux.toExponential(2)+'</b></span><span>Permeability <b>'+k+'</b></span><span>Pore Re <b>'+poreRe.toFixed(2)+'</b></span><span>Steps <b>'+iteration.toLocaleString()+'</b></span>';
+  if(!paused)$('warn').textContent=!poreCount?'No fluid space. Erase some rock.':!connected?'Blocked sample: no continuous horizontal pore path. Erase a passage or generate another sample.':maxSpeed>0.10?'Speed limiter active: driving force reduced.':poreRe>=1?'Inertial flow: permeability estimate withheld.':desired===0?'Driving force is off.':!settled?'Flow developing; permeability appears after the flux settles.':'Steady low-Re flow; permeability is in lattice units.';
+}
+function draw(){
+  for(let n=0;n<N;n++){
+    const p=4*((NY-1-((n/NX)|0))*NX+n%NX);
+    let r=238,g=241,b=255;
+    if(!solid[n]){const s=Math.min(1,Math.hypot(ux[n],uy[n])/0.03);
+      if(s<0.5){const t=2*s;r=20+40*t;g=33+77*t;b=61+194*t;}
+      else{const t=2*s-1;r=60+195*t;g=110+100*t;b=255-192*t;}
+    }image.data[p]=r;image.data[p+1]=g;image.data[p+2]=b;image.data[p+3]=255;
+  }
+  oc.putImageData(image,0,0);ctx.imageSmoothingEnabled=false;ctx.drawImage(off,0,0,cv.width,cv.height);
+  if(showTracers){ctx.fillStyle='rgba(255,255,255,.8)';for(let k=0;k<tracers.length/2;k++){
+    const x=tracers[2*k],y=tracers[2*k+1];if(x>=0&&!solid[((Math.round(y)+NY)%NY)*NX+(Math.round(x)+NX)%NX])ctx.fillRect(x*5,(NY-1-y)*5,2,2);
+  }}
+}
+function advect(){for(let k=0;k<tracers.length/2;k++){
+  let x=tracers[2*k],y=tracers[2*k+1];if(x<0){seedTracer(k);continue;}
+  // Substeps prevent a tracer jumping across a thin wall.
+  for(let j=0;j<6;j++){
+    const n=((Math.round(y)+NY)%NY)*NX+(Math.round(x)+NX)%NX;
+    x=(x+ux[n]+NX)%NX;y=(y+uy[n]+NY)%NY;
+    const m=((Math.round(y)+NY)%NY)*NX+(Math.round(x)+NX)%NX;
+    if(solid[m]){seedTracer(k);x=tracers[2*k];y=tracers[2*k+1];break;}
+  }tracers[2*k]=x;tracers[2*k+1]=y;if(Math.random()<0.001)seedTracer(k);
+}}
+function paintPoint(x,y){for(let yy=Math.floor(y-3);yy<=y+3;yy++)for(let xx=Math.floor(x-3);xx<=x+3;xx++){
+  if((xx-x)**2+(yy-y)**2>9)continue;
+  solid[((yy%NY+NY)%NY)*NX+(xx%NX+NX)%NX]=tool==='paint'?1:0;
+}}
+function position(e){const r=cv.getBoundingClientRect();return {x:Math.max(0,Math.min(NX-1,(e.clientX-r.left-cv.clientLeft)/cv.clientWidth*NX)),y:Math.max(0,Math.min(NY-1,NY-1-(e.clientY-r.top-cv.clientTop)/cv.clientHeight*NY))};}
+cv.addEventListener('pointerdown',e=>{if(pointer||(e.pointerType==='mouse'&&e.button!==0))return;pointer={...position(e),id:e.pointerId};cv.setPointerCapture(e.pointerId);paintPoint(pointer.x,pointer.y);draw();});
+cv.addEventListener('pointermove',e=>{if(!pointer||pointer.id!==e.pointerId)return;const p=position(e),dx=p.x-pointer.x,dy=p.y-pointer.y,length=Math.ceil(Math.hypot(dx,dy));for(let j=1;j<=length;j++)paintPoint(pointer.x+dx*j/length,pointer.y+dy*j/length);pointer={...p,id:e.pointerId};draw();});
+function finishEdit(e){if(!pointer||(e&&e.pointerId!==pointer.id))return;pointer=null;edited=true;topology();resetFlow();measure();report();}
+cv.addEventListener('pointerup',finishEdit);cv.addEventListener('pointercancel',finishEdit);cv.addEventListener('lostpointercapture',finishEdit);window.addEventListener('blur',()=>finishEdit());
+$('paint').onclick=()=>{tool='paint';$('paint').setAttribute('aria-pressed','true');$('erase').setAttribute('aria-pressed','false');};
+$('erase').onclick=()=>{tool='erase';$('erase').setAttribute('aria-pressed','true');$('paint').setAttribute('aria-pressed','false');};
+$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'Resume':'Pause';};
+$('reset').onclick=()=>{resetFlow();measure();report();};
+$('new').onclick=()=>{$('seed').value=(Math.random()*4294967296)>>>0;generate();measure();report();};
+$('generate').onclick=()=>{generate();measure();report();};
+for(const id of ['porosity','grain']){$(id).addEventListener('input',labels);$(id).addEventListener('change',()=>{generate();measure();report();});}
+$('drive').addEventListener('input',()=>{labels();history.length=0;});
+$('tracers').onclick=()=>{showTracers=!showTracers;$('tracers').textContent='Tracers: '+(showTracers?'on':'off');};
+let frames=0;
+function frame(){
+  if(!paused&&!pointer){
+    const desired=2e-4*+$('drive').value/100;
+    appliedForce=desired*Math.max(0,Math.min(1,(0.12-maxSpeed)/0.02));
+    for(let s=0;s<6;s++){step(appliedForce);iteration++;}
+    if(!measure()){paused=true;$('pause').textContent='Resume';$('warn').textContent='Numerical instability. Lower the driving force and restart flow.';}
+    else advect();
+  }
+  draw();if(++frames%20===0&&!pointer)report();requestAnimationFrame(frame);
+}
+$('code').textContent=step.toString();$('lines').textContent=step.toString().split('\n').length;generate();measure();report();requestAnimationFrame(frame);
+</script></body></html>

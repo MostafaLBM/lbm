@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LBM: droplet impact</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+:root{--bg:#FFFFFF;--fg:#14213D;--muted:#4A5568;--panel:#F1F4FF;--accent:#2347F5;--hot:#C2410C;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}}
+:root[data-theme="dark"]{--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:'DM Sans',system-ui,sans-serif;line-height:1.45}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 32px}
+h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:clamp(34px,7vw,56px);line-height:1;margin:0;color:var(--accent)}
+.sub{margin:8px 0 18px;font-size:17px}
+.wrap{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.left{flex:1 1 340px;max-width:560px}
+.right{flex:1 1 360px;min-width:0}
+canvas{width:100%;aspect-ratio:1;display:block;background:#14213D;border:2px solid var(--fg)}
+.lid{font-size:13px;color:var(--muted);margin:0 0 4px;text-align:center}
+.ctl{background:var(--panel);padding:12px;margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.ctl label{font-weight:700;display:flex;justify-content:space-between;gap:8px}
+input[type=range]{width:100%;min-height:44px}
+button{min-height:44px;padding:0 16px;font:inherit;font-weight:700;background:var(--accent);color:var(--bg);border:0;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.stats{font-size:14px;color:var(--muted)}
+.warn{color:var(--hot);font-weight:700;min-height:1.4em}
+h2{font-family:'Space Grotesk',system-ui,sans-serif;font-size:20px;margin:0 0 6px}
+.codebox{overflow-x:auto;background:var(--panel);padding:10px 12px;max-height:520px;overflow-y:auto}
+pre{margin:0;font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.note{font-size:14px;margin-top:12px}
+
+canvas{aspect-ratio:18/13;box-sizing:border-box;touch-action:none}
+button.alt{background:var(--panel);color:var(--fg);border:2px solid var(--accent)}
+select{min-height:44px;width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--muted);padding:6px}
+.controls{display:flex;flex-direction:column;gap:8px}.controls label{display:flex;justify-content:space-between;font-weight:700}.controls input{width:100%}
+.readouts{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}.readouts b{color:var(--fg)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}.swatch{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px}
+.fine{font-size:13px;color:var(--muted)}.equation{font-size:13px}pre{tab-size:2}button:disabled{opacity:.5}
+</style><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/demos.css"><link rel="stylesheet" href="../assets/demo-common.css"></head><body><a class="skip-link" href="#main-content">Skip to content</a>
+<nav class="site-nav" aria-label="Site navigation"><a href="../index.html#menu">Menu</a><a href="../index.html#play">Play</a><a href="../how.html">How LBM works</a><a href="../research.html">Research</a><a href="../gallery.html">Gallery</a></nav><nav class="demo-nav" aria-label="Simulation demos"><a href="lid.html">Lid-driven cavity</a><a href="square.html">Flow over a square</a><a href="porous.html">Porous flow</a><a href="droplet.html" aria-current="page">Droplet impact</a><a href="invasion.html">Capillary invasion</a><a href="convection.html">Natural convection</a></nav><main id="main-content">
+<h1>Droplet impact</h1>
+<p class="sub">A droplet and a surface, solved by particles that only <b>collide</b> and <b>stream</b>. Change the contact angle and Weber number to watch it spread and recoil. The core solver is on the right (<span id="lines">…</span> lines).</p>
+<div class="wrap"><div class="left">
+<canvas id="cv" width="1008" height="728" aria-label="Liquid droplet impacting a flat surface. Its boundary is the phi equals 0.5 contour."></canvas>
+<div class="legend"><span><i class="swatch" style="background:#4e90ff"></i>Liquid</span><span><i class="swatch" style="background:#101a31"></i>Gas</span><span>Interface: <b>φ = 0.5</b></span><span id="state" role="status">Ready</span></div>
+<div class="ctl"><div class="controls">
+<div><label for="ca"><span>Contact angle</span><span id="caOut">90°</span></label><input id="ca" type="range" min="35" max="145" step="5" value="90"><div class="fine">35°: wetting · 145°: non-wetting</div></div>
+<div><label for="we"><span>Weber number</span><span id="weOut">20</span></label><input id="we" type="range" min="5" max="60" step="1" value="20"><div class="fine">Inertia relative to surface tension</div></div>
+<div><label for="resolution"><span>Resolution</span></label><select id="resolution"><option value="112">Fast · 112 × 80</option><option value="144" selected>Balanced · 144 × 104</option><option value="192">Fine · 192 × 136</option></select></div>
+</div><div class="row"><button id="pause">Pause</button><button id="restart">Replay</button><button id="slow" class="alt" aria-pressed="false">Slow motion: off</button><button id="gas" class="alt" aria-pressed="true">Gas tracers: on</button><button id="vel" class="alt" aria-pressed="false">Velocity arrows: off</button></div>
+<div class="readouts" id="stats"></div><div class="warn" id="warn" role="status"></div></div>
+</div><div class="right">
+<h2>The core solver</h2><div class="codebox"><pre id="code"></pre></div>
+<p class="note">Try it: lower the contact angle to encourage spreading, or raise it to favour a compact drop and recoil. Increasing Weber number gives a faster impact. Slider changes replay the experiment. The impact starts with downward momentum; gravity is off.</p>
+<p class="note">Two sets of D2Q9 populations evolve flow and the phase field. The liquid is 100 times denser than the gas. Surface tension holds the drop together, and the contact angle controls how readily it wets the surface.</p>
+<p class="note equation">We = ρₗ U₀² d₀ / σ<br>Re = U₀ d₀ / ν &nbsp;·&nbsp; t* = t U₀ / d₀</p>
+<p class="fine">A two-dimensional model with an interpolated φ = 0.5 boundary. Thin films and tiny droplets need finer grids to resolve.</p>
+</div></div></main><script>
+'use strict';
+const CX=[0,1,0,-1,0,1,-1,-1,1], CY=[0,0,1,0,-1,1,1,-1,-1];
+const W=[4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36], OPP=[0,3,4,1,2,7,8,5,6];
+class DropLBM {
+  constructor(nx=144,ny=104){
+    this.nx=nx;this.ny=ny;this.n=nx*ny;
+    const n=this.n;
+    for(const key of ['f','fn','h','hn'])this[key]=new Float32Array(9*n);
+    for(const key of ['phi','u','v','gx','gy','mu'])this[key]=new Float32Array(n);
+    this.dest=new Int32Array(9*n);
+    for(let i=0;i<9;i++)for(let y=1;y<ny-1;y++)for(let x=0;x<nx;x++){
+      const yy=y+CY[i],m=yy*nx+(x+CX[i]+nx)%nx;
+      // Encode bounce-back in the destination, keeping streaming branch-free.
+      this.dest[i*n+y*nx+x]=yy===0||yy===ny-1?OPP[i]*n+y*nx+x:i*n+m;
+    }
+    this.sigma=0.0008;this.rhoL=1;this.rhoG=0.01;
+    this.nu=0.025;this.omega=1/(3*this.nu+0.5);this.omegaPhi=1/0.7;
+    this.width=4;this.radius=Math.round(nx/9);this.nu=0.025*Math.sqrt(this.radius/16);this.omega=1/(3*this.nu+0.5);this.time=0;
+  }
+  reset(angle=90,weber=20){
+    this.angle=angle;this.weber=weber;this.time=0;
+    this.impactSpeed=Math.sqrt(weber*this.sigma/(this.rhoL*2*this.radius));
+    this.beta=12*this.sigma/this.width;this.kappa=1.5*this.sigma*this.width;
+    const {nx,ny,n,radius}=this,centerY=radius+7;
+    this.f.fill(0);this.fn.fill(0);this.h.fill(0);this.hn.fill(0);
+    this.u.fill(0);this.v.fill(0);
+    for(let y=1;y<ny-1;y++)for(let x=0;x<nx;x++){
+      const m=y*nx+x,r=Math.hypot(x-(nx-1)/2,y-centerY);
+      const ph=0.5+0.5*Math.tanh(2*(radius-r)/this.width);
+      // The surrounding gas starts at rest; the liquid has downward momentum.
+      const v=-this.impactSpeed*ph;
+      this.phi[m]=ph;this.v[m]=v;
+      for(let i=0;i<9;i++){
+        const cu=CY[i]*v,eq=W[i]*(1+3*cu+4.5*cu*cu-1.5*v*v);
+        this.h[i*n+m]=ph*eq;
+        // Incompressible pressure population: sum(f)=p, first moment=(u,v).
+        this.f[i*n+m]=W[i]*(3*cu+4.5*cu*cu-1.5*v*v);
+      }
+    }
+    this.updatePhase();this.initialMass=this.mass();
+  }
+  updatePhase(){
+    const {nx,ny,n,h,phi}=this;
+    // First reconstruct ALL nodes; stencil neighbours must share a time level.
+    for(let m=nx;m<(ny-1)*nx;m++){
+      phi[m]=h[m]+h[n+m]+h[2*n+m]+h[3*n+m]+h[4*n+m]
+        +h[5*n+m]+h[6*n+m]+h[7*n+m]+h[8*n+m];
+    }
+    // Free-energy wetting at the bottom; theta is measured through the liquid.
+    const b=-2*Math.cos(this.angle*Math.PI/180)/this.width;
+    for(let x=0;x<nx;x++){
+      const ph=Math.max(0,Math.min(1,phi[nx+x]));
+      const disc=Math.max(0,(1+b)*(1+b)-4*b*ph);
+      phi[x]=4*ph/(1+b+Math.sqrt(disc))-ph; // finite at theta=90 degrees
+      phi[(ny-1)*nx+x]=phi[(ny-2)*nx+x]; // neutral top wall
+    }
+  }
+  gradients(){
+    const {nx,ny,phi,gx,gy,mu,beta,kappa}=this;
+    for(let y=1;y<ny-1;y++)for(let x=0;x<nx;x++){
+      const m=y*nx+x,e=y*nx+(x+1===nx?0:x+1),w=y*nx+(x===0?nx-1:x-1);
+      const ph=phi[m];
+      const lap=(phi[w-nx]+phi[w+nx]+phi[e-nx]+phi[e+nx]
+        +4*(phi[w]+phi[e]+phi[m-nx]+phi[m+nx])-20*ph)/6;
+      gx[m]=(phi[e]-phi[w])/3+(phi[e+nx]+phi[e-nx]-phi[w+nx]-phi[w-nx])/12;
+      gy[m]=(phi[m+nx]-phi[m-nx])/3+(phi[e+nx]+phi[w+nx]-phi[w-nx]-phi[e-nx])/12;
+      mu[m]=4*beta*ph*(ph-1)*(ph-0.5)-kappa*lap;
+    }
+  }
+  step(){
+    this.updatePhase();this.gradients();
+    const {nx,ny,n,f,fn,h,hn,phi,u,v,gx,gy,mu,dest,omega,omegaPhi,width}=this;
+    const drho=this.rhoL-this.rhoG,tau=1/omega-0.5;
+    for(let m=nx;m<(ny-1)*nx;m++){
+      const a=f[m],b=f[n+m],c=f[2*n+m],d=f[3*n+m],e=f[4*n+m];
+      const ff=f[5*n+m],g=f[6*n+m],hh=f[7*n+m],ii=f[8*n+m];
+      const p=a+b+c+d+e+ff+g+hh+ii,ph=phi[m];
+      const rho=this.rhoG+drho*Math.max(0,Math.min(1,ph));
+      let m11=hh-g-ii+ff,mDiff=d-c-e+b;
+      let mSum=e+c+d+2*hh+2*g+b+2*ii+2*ff;
+      const oldU=u[m],oldV=v[m],dx=gx[m],dy=gy[m];
+      const mxx=mSum/2-p/3+omega*(-oldU*oldU+oldV*oldV+mDiff)/2-(oldU*oldU+oldV*oldV)/2;
+      const myy=mSum/2-p/3-omega*(-oldU*oldU+oldV*oldV+mDiff)/2-(oldU*oldU+oldV*oldV)/2;
+      const mxy=omega*(m11-oldU*oldV);
+      const fx=(mu[m]*dx-p*dx*drho/3-tau*(mxx*dx+mxy*dy)*drho)/rho;
+      const fy=(mu[m]*dy-p*dy*drho/3-tau*(mxy*dx+myy*dy)*drho)/rho;
+      const uu=b-d+ff-g-hh+ii+0.5*fx,vv=c-e+ff+g-hh-ii+0.5*fy;
+      u[m]=uu;v[m]=vv;
+      // Relax the two shear moments; other moments go to forced equilibrium.
+      m11-=omega*(m11-uu*vv);mDiff-=omega*(mDiff-uu*uu+vv*vv);
+      mSum=uu*uu+vv*vv+2*p/3;
+      const m21=vv/3+fy/6,m12=uu/3+fx/6,m22=(uu*uu+vv*vv)/3+p/9;
+      const momX=uu+fx/2,momY=vv+fy/2;
+      const gradNorm=Math.sqrt(dx*dx+dy*dy)+1e-12;
+      const sharp=4*ph*(1-ph)/width;
+      const sx=sharp*dx/gradNorm,sy=sharp*dy/gradNorm,speed2=uu*uu+vv*vv;
+      // Explicit D2Q9 reconstruction and streaming.
+      {
+        // rest
+        const i=0,offset=0*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        fn[target]=m22-mSum+p;
+        hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // east
+        const i=1,offset=1*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        fn[target]=mDiff/4-m22/2-m12/2+mSum/4+momX/2;
+        hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // north
+        const i=2,offset=2*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        fn[target]=mSum/4-m22/2-mDiff/4-m21/2+momY/2;
+        hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // west
+        const i=3,offset=3*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        fn[target]=m12/2-m22/2+mDiff/4+mSum/4-momX/2;
+        hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // south
+        const i=4,offset=4*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        fn[target]=m21/2-m22/2-mDiff/4+mSum/4-momY/2;
+        hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // northeast
+        const i=5,offset=5*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        fn[target]=(m11+m12+m21+m22)/4;
+        hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // northwest
+        const i=6,offset=6*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        fn[target]=(m21-m12-m11+m22)/4;
+        hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // southwest
+        const i=7,offset=7*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        fn[target]=(m11-m12-m21+m22)/4;
+        hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // southeast
+        const i=8,offset=8*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        fn[target]=(m12-m11-m21+m22)/4;
+        hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+    }
+    this.f=fn;this.fn=f;this.h=hn;this.hn=h;this.time++;
+  }
+  mass(){let total=0;for(let m=this.nx;m<(this.ny-1)*this.nx;m++)total+=this.phi[m];return total;}
+  diagnostics(){
+    this.updatePhase();let min=1,max=0,speed=0;
+    for(let m=this.nx;m<(this.ny-1)*this.nx;m++){
+      const ph=this.phi[m];if(!Number.isFinite(ph)||!Number.isFinite(this.u[m])||!Number.isFinite(this.v[m]))return {ok:false};
+      min=Math.min(min,ph);max=Math.max(max,ph);speed=Math.max(speed,Math.hypot(this.u[m],this.v[m]));
+    }
+    return {ok:min>-.15&&max<1.15&&speed<0.25,min,max,speed,massError:(this.mass()-this.initialMass)/this.initialMass};
+  }
+}
+if(typeof module!=='undefined')module.exports={DropLBM};
+
+
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d');
+let sim=new DropLBM(),paused=false,slow=false,arrows=false,broken=false,showGas=true;
+const gasTracers=new Float32Array(800*2);
+const FRAME_INTERVAL=1000/24;
+let stepCost=1,previous=0,fps=24,frameCount=0,previousDiagnostic=null;
+let nextFrameAt=0,nextDiagnosticStep=0,tracerMs=0;
+let impactStarted=false,maxSpread=1,renderMs=0,stepsPerSecond=0,lastMetricTime=performance.now(),lastMetricStep=0;
+function replay(){
+ const nx=+$('resolution').value,ny=nx===112?80:nx===144?104:136;
+ if(sim.nx!==nx)sim=new DropLBM(nx,ny);
+ sim.reset(+$('ca').value,+$('we').value);paused=false;broken=false;previousDiagnostic=null;
+ impactStarted=false;maxSpread=1;nextDiagnosticStep=0;lastMetricTime=performance.now();lastMetricStep=0;stepsPerSecond=0;
+ $('caOut').textContent=sim.angle+'°';$('weOut').textContent=sim.weber;
+ $('pause').textContent='Pause';$('warn').textContent='';
+ seedGasTracers();report();draw();
+}
+// Bilinear sampling of the resolved field; particles never affect the solver.
+function sample(field,x,y){
+ const {nx,ny}=sim;
+ const xx=(x%nx+nx)%nx,yy=Math.max(1,Math.min(ny-2,y));
+ const ix=Math.floor(xx),iy=Math.floor(yy),tx=xx-ix,ty=yy-iy;
+ const a=iy*nx+ix,b=iy*nx+(ix+1)%nx;
+ return (1-ty)*((1-tx)*field[a]+tx*field[b])+ty*((1-tx)*field[a+nx]+tx*field[b+nx]);
+}
+function seedGas(k){
+ for(let j=0;j<100;j++){
+  const x=Math.random()*sim.nx,y=1+Math.random()*(sim.ny-3);
+  if(sample(sim.phi,x,y)<.1){gasTracers[2*k]=x;gasTracers[2*k+1]=y;return;}
+ }
+ gasTracers[2*k]=-1;
+}
+function seedGasTracers(){for(let k=0;k<gasTracers.length/2;k++)seedGas(k);}
+function advectGas(dt){
+ for(let k=0;k<gasTracers.length/2;k++){
+  let x=gasTracers[2*k],y=gasTracers[2*k+1];
+  if(x<0||sample(sim.phi,x,y)>=.5){seedGas(k);continue;}
+  const speed=Math.hypot(sample(sim.u,x,y),sample(sim.v,x,y));
+  const substeps=Math.max(1,Math.ceil(speed*dt/.25)),ds=dt/substeps;
+  let valid=true;
+  for(let j=0;j<substeps;j++){
+   const vx=sample(sim.u,x,y),vy=sample(sim.v,x,y);
+   x=(x+vx*ds+sim.nx)%sim.nx;y+=vy*ds;
+   if(y<1||y>sim.ny-2||sample(sim.phi,x,y)>=.5){valid=false;break;}
+  }
+  if(valid){gasTracers[2*k]=x;gasTracers[2*k+1]=y;}
+  else seedGas(k);
+ }
+}
+function contourTriangle(path,points){
+ const out=[];
+ for(let i=0;i<3;i++){
+  const a=points[i],b=points[(i+1)%3],inside=a[2]>=0.5,nextInside=b[2]>=0.5;
+  if(inside)out.push(a);
+  if(inside!==nextInside){const t=(0.5-a[2])/(b[2]-a[2]);out.push([a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])]);}
+ }
+ if(out.length<3)return;
+ path.moveTo(out[0][0],out[0][1]);for(let i=1;i<out.length;i++)path.lineTo(out[i][0],out[i][1]);path.closePath();
+}
+function draw(){
+ const start=performance.now(),{nx,ny,phi,u,v}=sim;
+ const scale=cv.width/nx,height=cv.height,wallY=height-26;
+ const yScreen=y=>wallY-(y-0.5)*scale;
+ ctx.fillStyle='#101a31';ctx.fillRect(0,0,cv.width,height);
+ // Piecewise-linear reconstruction of phi=0.5. No opacity mapping of phi.
+ const path=new Path2D();let left=nx,right=0,top=0,lowest=ny;
+ for(let y=0;y<ny-1;y++)for(let x=0;x<nx-1;x++){
+  const m=y*nx+x,a=phi[m],b=phi[m+1],c=phi[m+nx+1],d=phi[m+nx];
+  if(Math.max(a,b,c,d)<0.5)continue;
+  if(y>0){left=Math.min(left,x);right=Math.max(right,x+1);top=Math.max(top,y+1);lowest=Math.min(lowest,y);}
+  const xx=(x+0.5)*scale,yy=yScreen(y),ss=scale;
+  if(Math.min(a,b,c,d)>=0.5){path.rect(xx,yy-ss,ss,ss);continue;}
+  const A=[xx,yy,a],B=[xx+ss,yy,b],C=[xx+ss,yy-ss,c],D=[xx,yy-ss,d];
+  contourTriangle(path,[A,B,C]);contourTriangle(path,[A,C,D]);
+ }
+ ctx.save();ctx.beginPath();ctx.rect(0,0,cv.width,wallY);ctx.clip();
+ const liquid=ctx.createLinearGradient(0,yScreen(top),0,wallY);
+ liquid.addColorStop(0,'#84c3ff');liquid.addColorStop(1,'#3465ed');ctx.fillStyle=liquid;ctx.fill(path);
+ if(showGas){ctx.fillStyle='rgba(215,230,255,.65)';
+  for(let k=0;k<gasTracers.length/2;k++){
+   const x=gasTracers[2*k],y=gasTracers[2*k+1];
+   if(x>=0&&sample(phi,x,y)<.5)ctx.fillRect((x+.5)*scale,yScreen(y),2.2,2.2);
+  }
+ }
+ if(arrows){ctx.strokeStyle='rgba(235,247,255,.65)';ctx.lineWidth=1.2;
+  for(let y=3;y<ny-2;y+=5)for(let x=3;x<nx-2;x+=5){const m=y*nx+x;if(phi[m]<0.5)continue;
+   const ax=(x+0.5)*scale,ay=yScreen(y),dx=u[m]*scale*90,dy=-v[m]*scale*90;
+   const len=Math.hypot(dx,dy);if(len<1)continue;
+   ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(ax+dx,ay+dy);ctx.lineTo(ax+dx-3*dx/len+2*dy/len,ay+dy-3*dy/len-2*dx/len);ctx.moveTo(ax+dx,ay+dy);ctx.lineTo(ax+dx-3*dx/len-2*dy/len,ay+dy-3*dy/len+2*dx/len);ctx.stroke();
+  }
+ }
+ ctx.restore();
+ ctx.fillStyle='#273954';ctx.fillRect(0,wallY,cv.width,height-wallY);
+ ctx.strokeStyle='#a3b9d7';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(0,wallY);ctx.lineTo(cv.width,wallY);ctx.stroke();
+ ctx.fillStyle='#a7b9d4';ctx.font='15px system-ui';ctx.fillText('θ = '+sim.angle+'°',18,height-8);
+ ctx.fillStyle='#c4d5ed';ctx.font='14px system-ui';ctx.fillText('We '+sim.weber+'   ·   φ = 0.5',18,26);
+ // Flag near-wall deformation from the visible interface, including a thin gas film.
+ if(lowest<=2)impactStarted=true;
+ if(left<nx)maxSpread=Math.max(maxSpread,(right-left)/(2*sim.radius));
+ renderMs=performance.now()-start;
+}
+function report(){
+ const d=previousDiagnostic||sim.diagnostics(),re=sim.impactSpeed*2*sim.radius/sim.nu;
+ const massError=d.massError===undefined?'—':(100*Math.abs(d.massError)).toFixed(4)+'%';
+ $('stats').innerHTML='<span>t* <b>'+(sim.time*sim.impactSpeed/(2*sim.radius)).toFixed(2)+'</b></span><span>Re <b>'+re.toFixed(1)+'</b></span><span>Peak width / d₀ <b>'+maxSpread.toFixed(2)+'</b></span><span>Mass drift <b>'+massError+'</b></span><span><b>'+Math.round(fps)+' fps</b> · '+Math.round(stepsPerSecond)+' steps/s</span>';
+ $('state').textContent=broken?'Stopped':paused?'Paused':sim.time===0?'Ready':impactStarted?'Spreading / recoil':'Approaching the surface';
+ if(!broken)$('warn').textContent=sim.time>6000?'Long-time evolution; use Replay impact to compare another case.':fps<18?'Try Fast resolution on this device.':'';
+}
+function frame(){
+ const now=performance.now();
+ if(document.visibilityState==='hidden'){
+  previous=0;nextFrameAt=0;setTimeout(frame,250);return;
+ }
+ if(previous){const dt=now-previous;if(dt>0&&dt<1000)fps=fps*.9+1000/dt*.1;}previous=now;
+ if(!nextFrameAt)nextFrameAt=now;
+ if(!paused&&!broken){
+  const start=performance.now(),maxBudget=slow?8:30;
+  // More lattice steps between draws; never change the physical timestep.
+  let count=0;
+  do{sim.step();count++;}while(performance.now()-start+stepCost<maxBudget&&count<256);
+  stepCost=(performance.now()-start)/count;
+  sim.updatePhase();
+  if(sim.time>=nextDiagnosticStep){
+   previousDiagnostic=sim.diagnostics();nextDiagnosticStep=sim.time+128;
+   if(!previousDiagnostic.ok){broken=true;paused=true;$('pause').textContent='Resume';$('warn').textContent='Numerical limit reached. Replay the impact or lower We.';}
+  }
+  const tracerStart=performance.now();
+  if(showGas&&!broken)advectGas(count);
+  tracerMs=performance.now()-tracerStart;
+ }
+ draw();
+ const elapsed=now-lastMetricTime;
+ if(elapsed>700){stepsPerSecond=(sim.time-lastMetricStep)*1000/elapsed;lastMetricTime=now;lastMetricStep=sim.time;report();}
+ frameCount++;
+ nextFrameAt+=FRAME_INTERVAL;
+ // Yield to controls between batches; do not catch up missed background time.
+ const end=performance.now();if(nextFrameAt<end)nextFrameAt=end+1;
+ setTimeout(frame,Math.max(0,nextFrameAt-end));
+}
+$('restart').onclick=replay;
+$('pause').onclick=()=>{if(broken){replay();return;}paused=!paused;$('pause').textContent=paused?'Resume':'Pause';report();};
+$('slow').onclick=()=>{slow=!slow;$('slow').textContent='Slow motion: '+(slow?'on':'off');$('slow').setAttribute('aria-pressed',String(slow));};
+$('gas').onclick=()=>{showGas=!showGas;$('gas').textContent='Gas tracers: '+(showGas?'on':'off');$('gas').setAttribute('aria-pressed',String(showGas));if(showGas)seedGasTracers();};
+$('vel').onclick=()=>{arrows=!arrows;$('vel').textContent='Velocity arrows: '+(arrows?'on':'off');$('vel').setAttribute('aria-pressed',String(arrows));};
+for(const id of ['ca','we']){
+ $(id).addEventListener('input',()=>{$('caOut').textContent=$('ca').value+'°';$('weOut').textContent=$('we').value;});
+ $(id).addEventListener('change',replay);
+}
+$('resolution').addEventListener('change',replay);
+$('code').textContent=[DropLBM.prototype.updatePhase,DropLBM.prototype.gradients,DropLBM.prototype.step].map(f=>f.toString()).join('\n\n');
+$('lines').textContent=$('code').textContent.split('\n').length;
+replay();setTimeout(frame,0);
+</script></body></html>

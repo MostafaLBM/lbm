@@ -1,0 +1,401 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>LBM: capillary invasion</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=DM+Sans:wght@400;500;700&display=swap">
+<style>
+:root{--bg:#FFFFFF;--fg:#14213D;--muted:#4A5568;--panel:#F1F4FF;--accent:#2347F5;--hot:#C2410C;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}}
+:root[data-theme="dark"]{--bg:#0E1424;--fg:#EEF1FF;--muted:#A9B3CC;--panel:#18213A;--accent:#8DA2FF;--hot:#FFB38A}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:'DM Sans',system-ui,sans-serif;line-height:1.45}
+main{max-width:1100px;margin:0 auto;padding:20px 16px 32px}
+h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:clamp(34px,7vw,56px);line-height:1;margin:0;color:var(--accent)}
+.sub{margin:8px 0 18px;font-size:17px}
+.wrap{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.left{flex:1 1 340px;max-width:560px}
+.right{flex:1 1 360px;min-width:0}
+canvas{width:100%;aspect-ratio:1;display:block;background:#14213D;border:2px solid var(--fg)}
+.lid{font-size:13px;color:var(--muted);margin:0 0 4px;text-align:center}
+.ctl{background:var(--panel);padding:12px;margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.ctl label{font-weight:700;display:flex;justify-content:space-between;gap:8px}
+input[type=range]{width:100%;min-height:44px}
+button{min-height:44px;padding:0 16px;font:inherit;font-weight:700;background:var(--accent);color:var(--bg);border:0;cursor:pointer}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.stats{font-size:14px;color:var(--muted)}
+.warn{color:var(--hot);font-weight:700;min-height:1.4em}
+h2{font-family:'Space Grotesk',system-ui,sans-serif;font-size:20px;margin:0 0 6px}
+.codebox{overflow-x:auto;background:var(--panel);padding:10px 12px;max-height:520px;overflow-y:auto}
+pre{margin:0;font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.note{font-size:14px;margin-top:12px}
+
+canvas{aspect-ratio:24/13;box-sizing:border-box;touch-action:none}
+button.alt{background:var(--panel);color:var(--fg);border:2px solid var(--accent)}
+.controls{display:flex;flex-direction:column;gap:8px}.controls label{display:flex;justify-content:space-between;font-weight:700}.controls input{width:100%}
+input[type=number]{box-sizing:border-box;min-height:44px;background:var(--bg);color:var(--fg);border:1px solid var(--muted);font:inherit;padding:6px;width:100%}
+.readouts{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}.readouts b{color:var(--fg)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--muted);margin-top:6px}.swatch{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}.fine{font-size:13px;color:var(--muted)}pre{tab-size:2}
+</style><link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/demos.css"><link rel="stylesheet" href="../assets/demo-common.css"></head><body><a class="skip-link" href="#main-content">Skip to content</a><nav class="site-nav" aria-label="Site navigation"><a href="../index.html#menu">Menu</a><a href="../index.html#play">Play</a><a href="../how.html">How LBM works</a><a href="../research.html">Research</a><a href="../gallery.html">Gallery</a></nav><nav class="demo-nav" aria-label="Simulation demos"><a href="lid.html">Lid-driven cavity</a><a href="square.html">Flow over a square</a><a href="porous.html">Porous flow</a><a href="droplet.html">Droplet impact</a><a href="invasion.html" aria-current="page">Capillary invasion</a><a href="convection.html">Natural convection</a></nav><main id="main-content"><h1>Capillary invasion</h1>
+<p class="sub">Two fluids, one rock. Watch menisci advance through a network of pores, solved by particles that <b>collide</b> and <b>stream</b>. The core solver is on the right (<span id="lines">…</span> lines).</p>
+<div class="wrap"><div class="left">
+<canvas id="cv" width="960" height="520" aria-label="Blue fluid displacing orange fluid through porous rock. The interface is the phi equals 0.5 contour."></canvas>
+<div class="legend"><span><i class="swatch" style="background:#3d8bff"></i>Invading fluid</span><span><i class="swatch" style="background:#d88143"></i>Defending fluid</span><span><i class="swatch" style="background:#d5dbe9"></i>Rock</span><span>φ = 0.5 interface</span></div>
+<div class="ctl"><div class="controls">
+<div><label for="ca"><span>Contact angle</span><span id="caOut">75°</span></label><input id="ca" type="range" min="35" max="145" step="5" value="75"></div>
+<div><label for="drive"><span>Driving pressure Δp</span><span id="driveOut"></span></label><input id="drive" type="range" min="0" max="120" step="1" value="80"></div>
+<div><label for="porosity"><span>Target pore space</span><span id="porOut">66%</span></label><input id="porosity" type="range" min="56" max="78" value="66"></div>
+<div><label for="seed"><span>Sample seed</span></label><input id="seed" type="number" min="0" max="4294967295" step="1" value="2718"></div>
+</div><div class="row"><button id="pause">Pause</button><button id="restart">Reset</button><button id="new" class="alt">New sample</button><button id="apply" class="alt">Apply seed</button><button id="tracers" class="alt" aria-pressed="true">Tracers: on</button></div>
+<div class="readouts" id="stats"></div><div class="warn" id="warn" role="status"></div>
+<div class="fine">Pressure acts live. Contact angle replays the same rock; porosity and seed rebuild it.</div></div>
+</div><div class="right"><h2>The core solver</h2><div class="codebox"><pre id="code"></pre></div>
+<p class="note">Try it: lower the pressure and compare a wetting surface with a non-wetting one. Contact angle is measured through the blue fluid; lower angles mean stronger wetting. Watch which throats the blue fluid enters, where it slows, and whether pockets of orange fluid become isolated. Raise the pressure to push the front farther through the rock.</p>
+<p class="note">Surface tension resists interface deformation. Narrow throats impose a capillary barrier whose size depends on wetting. Pressure is imposed at the open reservoirs; there is no gravity or uniform body-force drive.</p>
+<p class="note">Saturation is the blue fluid’s share of the pore space inside the rock sample. Breakthrough means its φ = 0.5 contour has reached the end of the sample. Isolated pockets are orange regions disconnected from the outlet at that threshold; they can still change as the flow evolves.</p>
+<p class="fine">Two immiscible fluids with equal density and viscosity. This two-dimensional phase-field model uses a four-cell diffuse interface and nominal wetting on lattice-resolved grain surfaces. Very thin films, tiny pockets and apparent contact angles depend on resolution. Viscosity ν = 0.03; surface tension σ = 0.008.</p>
+</div></div></main><script>
+ 'use strict';
+const CX=[0,1,0,-1,0,1,-1,-1,1], CY=[0,0,1,0,-1,1,1,-1,-1];
+const W=[4/9,1/9,1/9,1/9,1/9,1/36,1/36,1/36,1/36], OPP=[0,3,4,1,2,7,8,5,6];
+class InvasionLBM {
+ constructor(nx=192,ny=104){
+  this.nx=nx;this.ny=ny;this.n=nx*ny;
+  const n=this.n;
+  for(const key of ['f','fn','h','hn'])this[key]=new Float32Array(9*n);
+  for(const key of ['phi','u','v','gx','gy','mu'])this[key]=new Float32Array(n);
+  this.solid=new Uint8Array(n);this.dest=new Int32Array(9*n);
+  this.adj=new Int32Array(9*n);this.fluid=[];this.ghost=[];
+  // Matched-density immiscible liquids isolate wetting and capillary effects.
+  this.rhoL=1;this.rhoG=1;this.nu=.03;this.omega=1/(3*this.nu+.5);
+  this.omegaPhi=1/.7;this.width=4;this.sigma=.008;
+  this.beta=12*this.sigma/this.width;this.kappa=1.5*this.sigma*this.width;
+  this.sampleStart=36;this.sampleEnd=nx-18;this.time=0;
+ }
+ random(seed){return ()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t^=t+Math.imul(t^t>>>7,61|t);return ((t^t>>>14)>>>0)/4294967296;};}
+ generate(seed=2718,porosity=.66){
+  const {nx,ny,n,solid}=this,random=this.random(seed);this.grains=[];
+  for(let col=0;col<4;col++)for(let row=0;row<3;row++)
+   this.grains.push({x:54+34*col+4*(random()-.5),y:19+33*row+4*(random()-.5),r:11*(.9+.2*random())});
+  const paint=scale=>{
+   solid.fill(0);for(let x=0;x<nx;x++){solid[x]=1;solid[(ny-1)*nx+x]=1;}
+   for(const g of this.grains){const r=g.r*scale;
+    for(let y=Math.max(1,Math.floor(g.y-r));y<=Math.min(ny-2,Math.ceil(g.y+r));y++)
+     for(let x=Math.max(1,Math.floor(g.x-r));x<=Math.min(nx-2,Math.ceil(g.x+r));x++)
+      if((x-g.x)**2+(y-g.y)**2<=r*r)solid[y*nx+x]=1;
+   }
+   let count=0;for(let y=1;y<ny-1;y++)for(let x=this.sampleStart;x<=this.sampleEnd;x++)count+=1-solid[y*nx+x];
+   return count/((this.sampleEnd-this.sampleStart+1)*(ny-2));
+  };
+  let lo=.3,hi=1.8;for(let k=0;k<17;k++){const mid=(lo+hi)/2;if(paint(mid)>porosity)lo=mid;else hi=mid;}
+  this.porosity=paint((lo+hi)/2);this.fluid=[];this.ghost=[];
+  for(let y=0;y<ny;y++)for(let x=0;x<nx;x++){
+   const m=y*nx+x;let touches=false;
+   for(let i=0;i<9;i++){
+    const xx=x+CX[i],yy=y+CY[i],out=xx<0||xx>=nx||yy<0||yy>=ny;
+    const q=out?m:yy*nx+xx;this.adj[i*n+m]=q;
+    this.dest[i*n+m]=out?-1:solid[q]?OPP[i]*n+m:i*n+q;
+    if(!out&&!solid[q]&&i>0)touches=true;
+   }
+   if(!solid[m])this.fluid.push(m);else if(touches)this.ghost.push(m);
+  }
+  this.fluid=Int32Array.from(this.fluid);this.ghost=Int32Array.from(this.ghost);
+  this.connected=this.connectivity();
+ }
+ connectivity(){
+  const {nx,ny,solid,n}=this,seen=new Uint8Array(n),queue=new Int32Array(n);
+  let head=0,tail=0;for(let y=1;y<ny-1;y++){const m=y*nx;if(!solid[m]){seen[m]=1;queue[tail++]=m;}}
+  while(head<tail){const m=queue[head++],x=m%nx;if(x===nx-1)return true;
+   for(let i=1;i<=4;i++){const q=this.adj[i*n+m];if(!seen[q]&&!solid[q]){seen[q]=1;queue[tail++]=q;}}
+  }return false;
+ }
+ reset(angle=75,pressure=.0024){
+  this.angle=angle;this.pressure=pressure;this.appliedPressure=0;this.time=0;this.u.fill(0);this.v.fill(0);
+  for(const key of ['f','fn','h','hn'])this[key].fill(0);
+  const {nx,n}=this;
+  for(const m of this.fluid){const x=m%nx,ph=.5+.5*Math.tanh(2*(38-x)/this.width),p=0;
+   for(let i=0;i<9;i++){this.f[i*n+m]=W[i]*p;this.h[i*n+m]=W[i]*ph;}
+  }
+  this.updatePhase();
+ }
+ updatePhase(){
+  const {nx,ny,n,h,phi,solid,adj}=this;
+  for(const m of this.fluid)phi[m]=h[m]+h[n+m]+h[2*n+m]+h[3*n+m]+h[4*n+m]+h[5*n+m]+h[6*n+m]+h[7*n+m]+h[8*n+m];
+  for(let y=1;y<ny-1;y++){phi[y*nx]=1;phi[y*nx+nx-1]=phi[y*nx+nx-2];}
+  // A solid ghost uses only neighbouring fluid values from this same time level.
+  // The free-energy condition is applied on every grain and both channel walls.
+  const b=-2*Math.cos(this.angle*Math.PI/180)/this.width;
+  for(const m of this.ghost){
+   let sum=0,weight=0;for(let i=1;i<9;i++){const q=adj[i*n+m];if(!solid[q]){sum+=W[i]*phi[q];weight+=W[i];}}
+   const ph=Math.max(0,Math.min(1,sum/weight));
+   const disc=Math.max(0,(1+b)*(1+b)-4*b*ph);
+   phi[m]=4*ph/(1+b+Math.sqrt(disc))-ph;
+  }
+ }
+ gradients(){
+  const {n,phi,gx,gy,mu,beta,kappa,adj}=this;
+  for(const m of this.fluid){
+   const e=phi[adj[n+m]],up=phi[adj[2*n+m]],w=phi[adj[3*n+m]],down=phi[adj[4*n+m]];
+   const ne=phi[adj[5*n+m]],nw=phi[adj[6*n+m]],sw=phi[adj[7*n+m]],se=phi[adj[8*n+m]],ph=phi[m];
+   gx[m]=(e-w)/3+(ne+se-nw-sw)/12;gy[m]=(up-down)/3+(ne+nw-sw-se)/12;
+   const lap=(ne+nw+sw+se+4*(e+w+up+down)-20*ph)/6;
+   mu[m]=4*beta*ph*(ph-1)*(ph-.5)-kappa*lap;
+  }
+ }
+ reservoirs(){
+  const {nx,ny,n,f,h,phi,u,v}=this;
+  // Ramp the reservoir pressure to avoid an impulsive startup.
+  this.appliedPressure+=.01*(this.pressure-this.appliedPressure);
+  const pl=3*this.appliedPressure;
+  for(let y=1;y<ny-1;y++)for(let side=0;side<2;side++){
+   const m=y*nx+(side?nx-1:0),q=m+(side?-1:1),p=side?0:pl;
+   const vv=0;let uu;
+   if(side===0){
+    uu=p-(f[m]+f[2*n+m]+f[4*n+m]+2*(f[3*n+m]+f[6*n+m]+f[7*n+m]));
+    f[n+m]=f[3*n+m]+2*uu/3;
+    f[5*n+m]=f[7*n+m]+(f[4*n+m]-f[2*n+m])/2+uu/6;
+    f[8*n+m]=f[6*n+m]+(f[2*n+m]-f[4*n+m])/2+uu/6;
+   }else{
+    uu=f[m]+f[2*n+m]+f[4*n+m]+2*(f[n+m]+f[5*n+m]+f[8*n+m])-p;
+    f[3*n+m]=f[n+m]-2*uu/3;
+    f[6*n+m]=f[8*n+m]+(f[4*n+m]-f[2*n+m])/2-uu/6;
+    f[7*n+m]=f[5*n+m]+(f[2*n+m]-f[4*n+m])/2-uu/6;
+   }
+   u[m]=uu;v[m]=vv;
+   // Non-equilibrium extrapolation supplies invading liquid at the inlet;
+   // the outlet extrapolates the local phase with zero normal gradient.
+   let phq=0;for(let i=0;i<9;i++)phq+=h[i*n+q];
+   const target=side?phq:1,uq=u[q],vq=v[q];
+   for(let i=0;i<9;i++){
+    const cu=CX[i]*uu,cuq=CX[i]*uq+CY[i]*vq;
+    const eq=W[i]*target*(1+3*cu+4.5*cu*cu-1.5*uu*uu);
+    const eqQ=W[i]*phq*(1+3*cuq+4.5*cuq*cuq-1.5*(uq*uq+vq*vq));
+    h[i*n+m]=eq+h[i*n+q]-eqQ;
+   }
+  }
+ }
+  step(){
+    this.updatePhase();this.gradients();
+    const {nx,ny,n,f,fn,h,hn,phi,u,v,gx,gy,mu,dest,omega,omegaPhi,width}=this;
+    for(const m of this.fluid){
+      const a=f[m],b=f[n+m],c=f[2*n+m],d=f[3*n+m],e=f[4*n+m];
+      const ff=f[5*n+m],g=f[6*n+m],hh=f[7*n+m],ii=f[8*n+m];
+      const p=a+b+c+d+e+ff+g+hh+ii,ph=phi[m];
+      let m11=hh-g-ii+ff,mDiff=d-c-e+b;
+      let mSum;
+      const dx=gx[m],dy=gy[m];
+      // Equal densities: only the chemical-potential capillary force remains.
+      const fx=mu[m]*dx,fy=mu[m]*dy;
+      const uu=b-d+ff-g-hh+ii+0.5*fx,vv=c-e+ff+g-hh-ii+0.5*fy;
+      u[m]=uu;v[m]=vv;
+      // Relax the two shear moments; other moments go to forced equilibrium.
+      m11-=omega*(m11-uu*vv);mDiff-=omega*(mDiff-uu*uu+vv*vv);
+      mSum=uu*uu+vv*vv+2*p/3;
+      const m21=vv/3+fy/6,m12=uu/3+fx/6,m22=(uu*uu+vv*vv)/3+p/9;
+      const momX=uu+fx/2,momY=vv+fy/2;
+      const gradNorm=Math.sqrt(dx*dx+dy*dy)+1e-12;
+      const sharp=4*ph*(1-ph)/width;
+      const sx=sharp*dx/gradNorm,sy=sharp*dy/gradNorm,speed2=uu*uu+vv*vv;
+      // Explicit D2Q9 reconstruction and streaming.
+      {
+        // rest
+        const i=0,offset=0*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        if(target>=0)fn[target]=m22-mSum+p;
+        if(target>=0)hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // east
+        const i=1,offset=1*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        if(target>=0)fn[target]=mDiff/4-m22/2-m12/2+mSum/4+momX/2;
+        if(target>=0)hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // north
+        const i=2,offset=2*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        if(target>=0)fn[target]=mSum/4-m22/2-mDiff/4-m21/2+momY/2;
+        if(target>=0)hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // west
+        const i=3,offset=3*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        if(target>=0)fn[target]=m12/2-m22/2+mDiff/4+mSum/4-momX/2;
+        if(target>=0)hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // south
+        const i=4,offset=4*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        if(target>=0)fn[target]=m21/2-m22/2-mDiff/4+mSum/4-momY/2;
+        if(target>=0)hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // northeast
+        const i=5,offset=5*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        if(target>=0)fn[target]=(m11+m12+m21+m22)/4;
+        if(target>=0)hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // northwest
+        const i=6,offset=6*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        if(target>=0)fn[target]=(m21-m12-m11+m22)/4;
+        if(target>=0)hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // southwest
+        const i=7,offset=7*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        if(target>=0)fn[target]=(m11-m12-m21+m22)/4;
+        if(target>=0)hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+      {
+        // southeast
+        const i=8,offset=8*n+m,cu=CX[i]*uu+CY[i]*vv;
+        const eq=W[i]*ph*(1+3*cu+4.5*cu*cu-1.5*speed2);
+        const target=dest[offset];
+        if(target>=0)fn[target]=(m12-m11-m21+m22)/4;
+        if(target>=0)hn[target]=h[offset]-omegaPhi*(h[offset]-eq)
+          +(1-omegaPhi/2)*W[i]*(CX[i]*sx+CY[i]*sy);
+      }
+    }
+    this.f=fn;this.fn=f;this.h=hn;this.hn=h;this.time++;
+    this.reservoirs();
+  }
+
+ diagnostics(){
+  this.updatePhase();let min=1,max=0,speed=0,saturation=0,count=0,front=this.sampleStart,breakthrough=false;
+  for(const m of this.fluid){const ph=this.phi[m],x=m%this.nx;
+   if(!Number.isFinite(ph)||!Number.isFinite(this.u[m])||!Number.isFinite(this.v[m]))return {ok:false};
+   min=Math.min(min,ph);max=Math.max(max,ph);speed=Math.max(speed,Math.hypot(this.u[m],this.v[m]));
+   if(x>=this.sampleStart&&x<=this.sampleEnd){saturation+=ph;count++;if(ph>=.5){front=Math.max(front,x);if(x===this.sampleEnd)breakthrough=true;}}
+  }
+  return {ok:min>-.12&&max<1.12&&speed<.2,min,max,speed,saturation:saturation/count,front,breakthrough};
+ }
+}
+if(typeof module!=='undefined')module.exports={InvasionLBM};
+
+
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d');
+const sim=new InvasionLBM(),tr=new Float32Array(1000*2);
+let paused=false,broken=false,showTracers=true,rockPath=null,lastD=null,pockets=0;
+let nextFrameAt=0,previous=0,fps=24,stepCost=1,iterationAtMetric=0,metricTime=performance.now(),stepsPerSecond=0,nextCheck=0;
+function labels(){$('caOut').textContent=$('ca').value+'°';$('porOut').textContent=$('porosity').value+'%';$('driveOut').textContent=(+$('drive').value*1e-4).toExponential(2);}
+function seed(k){
+ for(let j=0;j<100;j++){const x=1+Math.random()*(sim.nx-3),y=1+Math.random()*(sim.ny-3);
+  if(!sim.solid[Math.round(y)*sim.nx+Math.round(x)]){tr[2*k]=x;tr[2*k+1]=y;return;}
+ }tr[2*k]=-1;
+}
+function makeRock(){
+ const scale=cv.width/sim.nx;rockPath=new Path2D();
+ for(let y=0;y<sim.ny;y++)for(let x=0;x<sim.nx;x++)if(sim.solid[y*sim.nx+x])rockPath.rect(x*scale,(sim.ny-1-y)*scale,scale,scale);
+}
+function restart(rebuild=false){
+ labels();if(rebuild){$('seed').value=Number($('seed').value)>>>0;sim.generate(+$('seed').value,+$('porosity').value/100);makeRock();}
+ sim.reset(+$('ca').value,+$('drive').value*1e-4);paused=false;broken=false;nextCheck=0;lastD=sim.diagnostics();pockets=0;
+ metricTime=performance.now();iterationAtMetric=0;stepsPerSecond=0;$('pause').textContent='Pause';
+ for(let k=0;k<tr.length/2;k++)seed(k);report();draw();
+}
+function sample(field,x,y){
+ const xx=Math.max(0,Math.min(sim.nx-1.001,x)),yy=Math.max(1,Math.min(sim.ny-2.001,y));
+ const ix=Math.floor(xx),iy=Math.floor(yy),tx=xx-ix,ty=yy-iy,m=iy*sim.nx+ix;
+ return (1-ty)*((1-tx)*field[m]+tx*field[m+1])+ty*((1-tx)*field[m+sim.nx]+tx*field[m+sim.nx+1]);
+}
+function advect(dt){
+ for(let k=0;k<tr.length/2;k++){
+  let x=tr[2*k],y=tr[2*k+1];if(x<0){seed(k);continue;}
+  const speed=Math.hypot(sample(sim.u,x,y),sample(sim.v,x,y));
+  const count=Math.max(1,Math.ceil(speed*dt/.3)),ds=dt/count;let valid=true;
+  for(let j=0;j<count;j++){
+   const vx=sample(sim.u,x,y),vy=sample(sim.v,x,y);x+=vx*ds;y+=vy*ds;
+   if(x<1||x>sim.nx-2||y<1||y>sim.ny-2||sim.solid[Math.round(y)*sim.nx+Math.round(x)]){valid=false;break;}
+  }
+  if(valid){tr[2*k]=x;tr[2*k+1]=y;}else seed(k);
+ }
+}
+function isolatedPockets(){
+ const {nx,ny,n,phi,solid,adj}=sim,seen=new Uint8Array(n),queue=new Int32Array(n);let count=0;
+ for(const root of sim.fluid)if(!seen[root]&&phi[root]<.5){
+  let head=0,tail=1,touchesOutlet=false,sampleCells=0;seen[root]=1;queue[0]=root;
+  while(head<tail){const m=queue[head++],x=m%nx;if(x===nx-1)touchesOutlet=true;if(x>=sim.sampleStart&&x<=sim.sampleEnd)sampleCells++;
+   for(let i=1;i<=4;i++){const q=adj[i*n+m];if(!seen[q]&&!solid[q]&&phi[q]<.5){seen[q]=1;queue[tail++]=q;}}
+  }if(!touchesOutlet&&sampleCells>=8)count++;
+ }return count;
+}
+function contourTriangle(path,points){
+ const out=[];
+ for(let i=0;i<3;i++){
+  const a=points[i],b=points[(i+1)%3],inside=a[2]>=0.5,nextInside=b[2]>=0.5;
+  if(inside)out.push(a);
+  if(inside!==nextInside){const t=(0.5-a[2])/(b[2]-a[2]);out.push([a[0]+t*(b[0]-a[0]),a[1]+t*(b[1]-a[1])]);}
+ }
+ if(out.length<3)return;
+ path.moveTo(out[0][0],out[0][1]);for(let i=1;i<out.length;i++)path.lineTo(out[i][0],out[i][1]);path.closePath();
+}
+
+function draw(){
+ const {nx,ny,phi,solid}=sim,scale=cv.width/nx;
+ ctx.fillStyle='#cf7b40';ctx.fillRect(0,0,cv.width,cv.height);
+ const path=new Path2D();
+ for(let y=0;y<ny-1;y++)for(let x=0;x<nx-1;x++){
+  const m=y*nx+x;if(solid[m]&&solid[m+1]&&solid[m+nx]&&solid[m+nx+1])continue;
+  const a=phi[m],b=phi[m+1],c=phi[m+nx+1],d=phi[m+nx];
+  if(Math.max(a,b,c,d)<.5)continue;
+  const xx=(x+.5)*scale,yy=(ny-.5-y)*scale;
+  if(Math.min(a,b,c,d)>=.5){path.rect(xx,yy-scale,scale,scale);continue;}
+  const A=[xx,yy,a],B=[xx+scale,yy,b],C=[xx+scale,yy-scale,c],D=[xx,yy-scale,d];
+  contourTriangle(path,[A,B,C]);contourTriangle(path,[A,C,D]);
+ }
+ ctx.fillStyle='#3d8bff';ctx.fill(path);ctx.fillStyle='#eef1ff';ctx.fill(rockPath);
+ if(showTracers){ctx.fillStyle='rgba(255,255,255,.7)';for(let k=0;k<tr.length/2;k++){
+  const x=tr[2*k],y=tr[2*k+1];if(x>=0&&!solid[Math.round(y)*nx+Math.round(x)])ctx.fillRect((x+.5)*scale,(ny-.5-y)*scale,2,2);
+ }}
+ ctx.save();ctx.font='14px system-ui';ctx.fillStyle='rgba(14,20,36,.8)';ctx.fillRect(8,9,220,26);ctx.fillStyle='#fff';ctx.fillText('Inlet →     Δp = '+sim.pressure.toFixed(4),17,27);
+ ctx.fillStyle='rgba(14,20,36,.8)';ctx.fillRect(cv.width-83,9,75,26);ctx.fillStyle='#fff';ctx.fillText('Outlet →',cv.width-75,27);ctx.restore();
+}
+function report(){
+ const d=lastD||sim.diagnostics();
+ $('stats').innerHTML='<span>Saturation <b>'+(100*Math.max(0,Math.min(1,d.saturation||0))).toFixed(1)+'%</b></span><span>Pore space <b>'+(100*sim.porosity).toFixed(1)+'%</b></span><span>Isolated pockets <b>'+pockets+'</b></span><span><b>'+Math.round(fps)+' fps</b> · '+Math.round(stepsPerSecond)+' steps/s</span><span>Steps <b>'+sim.time.toLocaleString()+'</b></span>';
+ if(broken)return;
+ $('warn').textContent=!sim.connected?'Blocked sample: generate another rock.':paused?'Paused.':d.breakthrough?'Breakthrough: blue fluid reached the end of the sample.':sim.pressure===0?'No imposed pressure difference. Wetting can still draw fluid into pores.':'Invading: pressure and capillarity compete at the pore throats.';
+}
+function frame(){
+ const now=performance.now();if(document.visibilityState==='hidden'){previous=0;nextFrameAt=0;setTimeout(frame,250);return;}
+ if(previous){const dt=now-previous;if(dt>0&&dt<1000)fps=.9*fps+.1*1000/dt;}previous=now;if(!nextFrameAt)nextFrameAt=now;
+ if(!paused&&!broken){
+  const start=performance.now();let count=0;
+  do{sim.step();count++;}while(performance.now()-start+stepCost<30&&count<256);
+  stepCost=(performance.now()-start)/count;sim.updatePhase();
+  if(sim.time>=nextCheck){lastD=sim.diagnostics();nextCheck=sim.time+128;if(!lastD.ok){broken=true;paused=true;$('pause').textContent='Resume';$('warn').textContent='Numerical limit reached. Lower the pressure and restart invasion.';}}
+  if(showTracers&&!broken)advect(count);
+ }
+ draw();if(now-metricTime>700){stepsPerSecond=(sim.time-iterationAtMetric)*1000/(now-metricTime);metricTime=now;iterationAtMetric=sim.time;pockets=isolatedPockets();report();}
+ nextFrameAt+=1000/24;const end=performance.now();if(nextFrameAt<end)nextFrameAt=end+1;setTimeout(frame,Math.max(0,nextFrameAt-end));
+}
+$('pause').onclick=()=>{if(broken){restart();return;}paused=!paused;$('pause').textContent=paused?'Resume':'Pause';report();};
+$('restart').onclick=()=>restart();$('apply').onclick=()=>restart(true);
+$('new').onclick=()=>{$('seed').value=(Math.random()*4294967296)>>>0;restart(true);};
+$('ca').addEventListener('input',labels);$('ca').addEventListener('change',()=>restart());
+$('porosity').addEventListener('input',labels);$('porosity').addEventListener('change',()=>restart(true));
+$('drive').addEventListener('input',()=>{labels();sim.pressure=+$('drive').value*1e-4;report();});
+$('tracers').onclick=()=>{showTracers=!showTracers;$('tracers').textContent='Tracers: '+(showTracers?'on':'off');$('tracers').setAttribute('aria-pressed',String(showTracers));};
+$('code').textContent=[InvasionLBM.prototype.updatePhase,InvasionLBM.prototype.gradients,InvasionLBM.prototype.step,InvasionLBM.prototype.reservoirs].map(f=>f.toString()).join('\n\n');
+$('lines').textContent=$('code').textContent.split('\n').length;
+restart(true);setTimeout(frame,0);
+</script></body></html>
