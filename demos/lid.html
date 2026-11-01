@@ -21,6 +21,7 @@ canvas{touch-action:none;user-select:none;width:100%;aspect-ratio:1;display:bloc
 .lid{font-size:13px;color:var(--muted);margin:0 0 4px;text-align:center}
 .ctl{background:var(--panel);padding:12px;margin-top:10px;display:flex;flex-direction:column;gap:8px}
 .ctl label{font-weight:700;display:flex;justify-content:space-between;gap:8px}
+select{min-height:44px;padding:0 10px;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--muted)}
 input[type=range]{width:100%;min-height:44px}
 button{min-height:44px;padding:0 16px;font:inherit;font-weight:700;background:var(--accent);color:var(--bg);border:0;cursor:pointer}
 .row{display:flex;gap:8px;flex-wrap:wrap}
@@ -36,12 +37,14 @@ pre{margin:0;font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace}
 <nav class="site-nav" aria-label="Site navigation"><a href="../index.html#menu">Menu</a><a href="../index.html#play">Play</a><a href="../how.html">How LBM works</a><a href="../research.html">Research</a><a href="../gallery.html">Gallery</a></nav><nav class="demo-nav" aria-label="Simulation demos"><a href="lid.html" aria-current="page">Lid-driven cavity</a><a href="square.html">Flow over a square</a><a href="porous.html">Porous flow</a><a href="droplet.html">Droplet impact</a><a href="invasion.html">Capillary invasion</a><a href="convection.html">Natural convection</a></nav>
 <main id="main-content">
 <h1>LBM in your pocket</h1>
-<p class="sub">A lid-driven cavity, solved by particles that only <b>collide</b> and <b>stream</b>. No pressure equation, no mesh. The whole solver is on the right (<span id="lines">…</span> lines).</p>
+<p class="sub">A lid-driven cavity, solved by particles that only <b>collide</b> and <b>stream</b>. No pressure equation, just a regular lattice. Choose a collision model below. The selected collision and streaming code is on the right (<span id="lines">…</span> lines).</p>
 <div class="wrap">
 <div class="left">
 <p class="lid">lid moving right &rarr;</p>
 <canvas id="cv" width="512" height="512" aria-label="Speed field of a lid-driven cavity with tracer particles"></canvas>
 <div class="ctl">
+<label for="model">Collision model</label>
+<select id="model"><option value="MRT">MRT</option><option value="BGK">BGK</option><option value="Cumulant">Cumulants</option></select>
 <label for="re"><span>Reynolds number</span><span id="reOut">1000</span></label>
 <input id="re" type="range" min="0" max="100" value="50">
 <div class="row"><button id="pause" type="button">Pause</button><button id="reset" type="button">Reset</button></div>
@@ -52,7 +55,13 @@ pre{margin:0;font:12.5px/1.4 ui-monospace,Menlo,Consolas,monospace}
 <div class="right">
 <h2>The entire solver</h2>
 <div class="codebox"><pre id="code"></pre></div>
-<p class="note">Try it: drag Re up and watch the corner eddies grow, then keep going until it breaks. That limit is &tau; &rarr; &frac12;, which is where research on collision models begins. Research codes add curved walls, multiphase flow, GPUs and much more.</p>
+<div class="note">
+<h2>Try the collision models</h2>
+<p>Start at a low Reynolds number (Re) with MRT and let the circulation develop. Repeat with BGK and Cumulants at the same Re, allowing each model the same time to evolve. Switching models resets the flow.</p>
+<p>Now increase Re in stages for each model. The lid speed stays fixed, so increasing Re reduces viscosity and moves &omega; toward 2 (&tau; toward &frac12;). Watch the main vortex and the small corner eddies: how do their shapes, sizes and motion change?</p>
+<p>Keep increasing Re and compare when each model develops irregular patterns or becomes numerically unstable. Record Re, &omega; and what you observe. If the simulation blows up, lower Re and press Reset. Which model remains stable longest in this demo? Do the models give similar flow patterns before instability appears?</p>
+<p>For a fair comparison, use the same Re and elapsed simulation time, and avoid stirring with the mouse. Unsteady motion can be physical, but grid-scale noise or a numerical blow-up signals a numerical problem; stability alone does not establish accuracy on this fixed 128 &times; 128 lattice.</p>
+</div>
 </div>
 </div>
 </main>
@@ -101,6 +110,68 @@ function applyDrag(n, rho, u, v) {
 }
 
 
+function collideMRT(f00, fp0, f0p, fm0, f0m, fpp, fmp, fmm, fpm, rho, u, v, omega) {
+    // 2. collide: relax the two shear moments, set all higher moments to equilibrium
+    let M11 = fmm - fmp - fpm + fpp;
+    let M20m02 = fm0 - f0p - f0m + fp0;
+    M11 -= omega * (M11 - rho*u*v);
+    M20m02 -= omega * (M20m02 - rho*(u*u - v*v));
+    const M20p02 = rho*(3*u*u + 3*v*v + 2) / 3;
+    const M21 = (rho + 3*u*u) * v / 3, M12 = (rho + 3*v*v) * u / 3;
+    const M22 = rho*(3*u*u + 3*v*v + 1) / 9 + u*u*v*v;
+    P[0] = M22 - M20p02 + rho;
+    P[1] = M20m02/4 - M22/2 - M12/2 + M20p02/4 + rho*u/2;
+    P[2] = M20p02/4 - M22/2 - M20m02/4 - M21/2 + rho*v/2;
+    P[3] = M12/2 - M22/2 + M20m02/4 + M20p02/4 - rho*u/2;
+    P[4] = M21/2 - M22/2 - M20m02/4 + M20p02/4 - rho*v/2;
+    P[5] = (M11 + M12 + M21 + M22) / 4;
+    P[6] = (M21 - M12 - M11 + M22) / 4;
+    P[7] = (M11 - M12 - M21 + M22) / 4;
+    P[8] = (M12 - M11 - M21 + M22) / 4;
+}
+
+function collideBGK(f00, fp0, f0p, fm0, f0m, fpp, fmp, fmm, fpm, rho, u, v, omega) {
+  P[0]=f00; P[1]=fp0; P[2]=f0p; P[3]=fm0; P[4]=f0m;
+  P[5]=fpp; P[6]=fmp; P[7]=fmm; P[8]=fpm;
+  for (let i=0; i<9; i++) {
+    const cu = CX[i]*u + CY[i]*v;
+    const eq = W[i]*rho*(1 + 3*cu + 4.5*cu*cu - 1.5*(u*u+v*v));
+    P[i] += omega*(eq-P[i]);
+  }
+}
+
+// D2Q9 port of d_collideCumulant in lbm_physics.cu.
+// Full-population (unshifted) moments; equivalent to the reference's
+// conditioned fbar transform. Third/fourth cumulant rates are both 1.
+function collideCumulant(f00, fp0, f0p, fm0, f0m, fpp, fmp, fmm, fpm, rho, u, v, omega) {
+  let M11 = fpp-fmp+fmm-fpm;
+  let difference = fp0+fm0-f0p-f0m;
+  M11 -= omega*(M11-rho*u*v);
+  difference -= omega*(difference-rho*(u*u-v*v));
+  const trace = rho*(2/3+u*u+v*v);
+  const M20 = (trace+difference)/2, M02 = (trace-difference)/2;
+  // Reconstruct raw moments from zero third central moments.
+  const M21 = 2*u*M11 + v*M20 - 2*rho*u*u*v;
+  const M12 = 2*v*M11 + u*M02 - 2*rho*u*v*v;
+  const mu20 = M20-rho*u*u, mu02 = M02-rho*v*v;
+  const mu11 = M11-rho*u*v;
+  // kappa22=0 => mu22=(mu20*mu02+2*mu11^2)/rho.
+  const mu22 = (mu20*mu02+2*mu11*mu11)/rho;
+  const M22 = mu22 + 2*v*M21 + 2*u*M12 - v*v*M20 - u*u*M02
+    - 4*u*v*M11 + 3*rho*u*u*v*v;
+  P[0] = M22-trace+rho;
+  P[1] = difference/4-M22/2-M12/2+trace/4+rho*u/2;
+  P[2] = trace/4-M22/2-difference/4-M21/2+rho*v/2;
+  P[3] = M12/2-M22/2+difference/4+trace/4-rho*u/2;
+  P[4] = M21/2-M22/2-difference/4+trace/4-rho*v/2;
+  P[5] = (M11+M12+M21+M22)/4;
+  P[6] = (M21-M12-M11+M22)/4;
+  P[7] = (M11-M12-M21+M22)/4;
+  P[8] = (M12-M11-M21+M22)/4;
+}
+
+let collide = collideMRT;
+
 function step(f, fn, omega) {
   for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
     const n = y * NX + x;
@@ -120,23 +191,7 @@ function step(f, fn, omega) {
     const rho = f00 + fp0 + f0p + fm0 + f0m + fpp + fmp + fmm + fpm;
     const u = (fp0 - fm0 + fpp - fmp - fmm + fpm) / rho;
     const v = (f0p - f0m + fpp + fmp - fmm - fpm) / rho;
-    // 2. collide: relax the two shear moments, set all higher moments to equilibrium
-    let M11 = fmm - fmp - fpm + fpp;
-    let M20m02 = fm0 - f0p - f0m + fp0;
-    M11 -= omega * (M11 - rho*u*v);
-    M20m02 -= omega * (M20m02 - rho*(u*u - v*v));
-    const M20p02 = rho*(3*u*u + 3*v*v + 2) / 3;
-    const M21 = (rho + 3*u*u) * v / 3, M12 = (rho + 3*v*v) * u / 3;
-    const M22 = rho*(3*u*u + 3*v*v + 1) / 9 + u*u*v*v;
-    P[0] = M22 - M20p02 + rho;
-    P[1] = M20m02/4 - M22/2 - M12/2 + M20p02/4 + rho*u/2;
-    P[2] = M20p02/4 - M22/2 - M20m02/4 - M21/2 + rho*v/2;
-    P[3] = M12/2 - M22/2 + M20m02/4 + M20p02/4 - rho*u/2;
-    P[4] = M21/2 - M22/2 - M20m02/4 + M20p02/4 - rho*v/2;
-    P[5] = (M11 + M12 + M21 + M22) / 4;
-    P[6] = (M21 - M12 - M11 + M22) / 4;
-    P[7] = (M11 - M12 - M21 + M22) / 4;
-    P[8] = (M12 - M11 - M21 + M22) / 4;
+    collide(f00, fp0, f0p, fm0, f0m, fpp, fmp, fmm, fpm, rho, u, v, omega);
     applyDrag(n, rho, u, v);
     // 3. stream: every population hops to its neighbor
     for (let i = 0; i < 9; i++) fn[i*N + (y + CY[i])*NX + x + CX[i]] = P[i];
@@ -212,7 +267,7 @@ function init() {
   for (let k = 0; k < NT; k++) seed(k);
   document.getElementById('warn').textContent = '';
 }
-const OMEGA_MAX = 1.999, RE_MAX = U * NX / ((1 / OMEGA_MAX - 0.5) / 3);
+const OMEGA_MAX = 1.9999, RE_MAX = U * NX / ((1 / OMEGA_MAX - 0.5) / 3);
 function setRe() {
   const s = +document.getElementById('re').value;
   Re = s >= 100 ? RE_MAX : 100 * Math.pow(RE_MAX / 100, s / 100);
@@ -274,9 +329,18 @@ function frame() {
   }
   requestAnimationFrame(frame);
 }
-const displayedSolver = "function step(f, fn, omega) {\n  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {\n    const n = y * NX + x;\n    if (x === 0 || x === NX - 1 || y === 0 || y === NY - 1) {\n      // wall node: every population turns around (the lid adds momentum)\n      const uw = (y === NY - 1 && x > 0 && x < NX - 1) ? U : 0;\n      for (let i = 1; i < 9; i++) {\n        const X = x + CX[i], Y = y + CY[i];\n        if (X >= 0 && X < NX && Y >= 0 && Y < NY)\n          fn[i*N + Y*NX + X] = f[OPP[i]*N + n] + 6 * W[i] * CX[i] * uw;\n      }\n      continue;\n    }\n    const f00 = f[n], fp0 = f[N+n], f0p = f[2*N+n], fm0 = f[3*N+n], f0m = f[4*N+n],\n          fpp = f[5*N+n], fmp = f[6*N+n], fmm = f[7*N+n], fpm = f[8*N+n];\n    // 1. moments: density and velocity\n    const rho = f00 + fp0 + f0p + fm0 + f0m + fpp + fmp + fmm + fpm;\n    const u = (fp0 - fm0 + fpp - fmp - fmm + fpm) / rho;\n    const v = (f0p - f0m + fpp + fmp - fmm - fpm) / rho;\n    // 2. collide: relax the two shear moments, set all higher moments to equilibrium\n    let M11 = fmm - fmp - fpm + fpp;\n    let M20m02 = fm0 - f0p - f0m + fp0;\n    M11 -= omega * (M11 - rho*u*v);\n    M20m02 -= omega * (M20m02 - rho*(u*u - v*v));\n    const M20p02 = rho*(3*u*u + 3*v*v + 2) / 3;\n    const M21 = (rho + 3*u*u) * v / 3, M12 = (rho + 3*v*v) * u / 3;\n    const M22 = rho*(3*u*u + 3*v*v + 1) / 9 + u*u*v*v;\n    P[0] = M22 - M20p02 + rho;\n    P[1] = M20m02/4 - M22/2 - M12/2 + M20p02/4 + rho*u/2;\n    P[2] = M20p02/4 - M22/2 - M20m02/4 - M21/2 + rho*v/2;\n    P[3] = M12/2 - M22/2 + M20m02/4 + M20p02/4 - rho*u/2;\n    P[4] = M21/2 - M22/2 - M20m02/4 + M20p02/4 - rho*v/2;\n    P[5] = (M11 + M12 + M21 + M22) / 4;\n    P[6] = (M21 - M12 - M11 + M22) / 4;\n    P[7] = (M11 - M12 - M21 + M22) / 4;\n    P[8] = (M12 - M11 - M21 + M22) / 4;\n    // 3. stream: every population hops to its neighbor\n    for (let i = 0; i < 9; i++) fn[i*N + (y + CY[i])*NX + x + CX[i]] = P[i];\n  }\n}";
-document.getElementById('code').textContent = displayedSolver;
-document.getElementById('lines').textContent = displayedSolver.split('\n').length;
+function showSolver() {
+  const displayedSolver = collide.toString() + '\n\n' + step.toString().replace('    applyDrag(n, rho, u, v);\n', '');
+  document.getElementById('code').textContent = displayedSolver;
+  document.getElementById('lines').textContent = displayedSolver.split('\n').length;
+}
+document.getElementById('model').addEventListener('change', function () {
+  collide = {MRT:collideMRT, BGK:collideBGK, Cumulant:collideCumulant}[this.value];
+  showSolver(); init(); paused = false;
+  document.getElementById('pause').textContent = 'Pause';
+});
+showSolver();
+
 document.getElementById('re').addEventListener('input', setRe);
 document.getElementById('pause').addEventListener('click', function () {
   strokes.length = 0; drag = null;
